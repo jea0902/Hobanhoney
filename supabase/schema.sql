@@ -1,0 +1,39 @@
+-- Supabase SQL Editor에서 한 번 실행하세요.
+create table if not exists positions (
+  id uuid primary key default gen_random_uuid(),
+
+  -- "actual"(실제 포지션) | "statement"(예측 발언)
+  type text not null default 'actual' check (type in ('actual', 'statement')),
+
+  -- 생성 시 한 번만 입력, 이후 수정 안 함
+  trader_name text not null,
+
+  -- 관리자가 직접 입력/수정
+  trader_image text,
+
+  -- 실제 포지션 전용 (type = 'actual')
+  symbol text,
+  leverage numeric,
+  quantity numeric, -- 수량(기초자산 개수, 예: BTC 수량)
+  entry_price numeric, -- USDT
+  liquidation_price numeric, -- USDT
+
+  -- 예측 발언 전용 (type = 'statement')
+  quote text,
+
+  -- 공통: 실제 포지션의 방향 / 예측 발언의 예상 방향
+  direction text not null check (direction in ('Long', 'Short')),
+
+  -- 결과: 수정 폼 안에서 다른 필드와 함께 저장된다
+  result text check (result in ('win', 'draw', 'loss')),
+  result_note text,
+  result_pnl_percent numeric, -- "지금 시세로 자동 계산" 버튼 사용 시 자동 기록
+  result_recorded_at timestamptz,
+
+  -- 자동 기록 (pnl/수익률은 저장하지 않고 entry_price·direction·leverage·quantity +
+  -- 실시간 mark_price로 그때그때 계산)
+  created_at timestamptz not null default now()
+);
+
+-- 서버(Service Role Key)에서만 접근하고 브라우저에서 직접 호출하지 않으므로 RLS는 잠가둡니다.
+alter table positions enable row level security;

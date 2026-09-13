@@ -1,8 +1,27 @@
+import Navbar from "@/components/home/Navbar";
+import NoticeBanner from "@/components/home/NoticeBanner";
+import MarketStatusBar from "@/components/home/MarketStatusBar";
+import PositionGrid from "@/components/home/PositionGrid";
+import IndexSidebar from "@/components/home/IndexSidebar";
+import AutoRefresh from "@/components/AutoRefresh";
+
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-24">
-      <h1 className="text-4xl font-bold">hobanggool</h1>
-      <p className="text-gray-500">Next.js 14 + TypeScript + Tailwind CSS</p>
-    </main>
+    <div className="min-h-screen bg-[#F5F6F8]">
+      <AutoRefresh intervalMs={10000} />
+      <Navbar />
+      <NoticeBanner />
+
+      <div className="flex gap-6 p-6">
+        <main className="flex min-w-0 flex-1 flex-col gap-4">
+          <MarketStatusBar />
+          <PositionGrid />
+        </main>
+
+        <IndexSidebar />
+      </div>
+    </div>
   );
 }
