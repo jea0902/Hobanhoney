@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "hobanggool",
+  title: "호반꿀 - 인간지표 사이트",
   description: "humanindex_website",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
