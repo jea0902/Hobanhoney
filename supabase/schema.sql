@@ -37,3 +37,16 @@ create table if not exists positions (
 
 -- 서버(Service Role Key)에서만 접근하고 브라우저에서 직접 호출하지 않으므로 RLS는 잠가둡니다.
 alter table positions enable row level security;
+
+-- Vercel 무료 플랜은 런타임 로그를 오래 안 남겨서, 외부 API 실패/관리자 작업 같은
+-- 의미 있는 이벤트를 여기 직접 기록한다.
+create table if not exists logs (
+  id uuid primary key default gen_random_uuid(),
+  level text not null check (level in ('error', 'info')),
+  source text not null, -- 'bybit' | 'bithumb' | 'yahoo_finance' | 'alternative_me' | 'admin'
+  message text not null,
+  detail text,
+  created_at timestamptz not null default now()
+);
+
+alter table logs enable row level security;

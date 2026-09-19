@@ -36,11 +36,16 @@ export default async function AdminPage() {
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-gray-900">포지션 관리</h1>
-          <form action={logout}>
-            <button type="submit" className="text-sm text-gray-500 underline">
-              로그아웃
-            </button>
-          </form>
+          <div className="flex items-center gap-3">
+            <Link href="/admin/logs" className="text-sm text-gray-500 underline">
+              로그
+            </Link>
+            <form action={logout}>
+              <button type="submit" className="text-sm text-gray-500 underline">
+                로그아웃
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="flex gap-2">
