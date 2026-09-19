@@ -50,3 +50,13 @@ create table if not exists logs (
 );
 
 alter table logs enable row level security;
+
+-- "랭커" 페이지: 지갑 주소만 등록해두면 포지션 데이터는 하이퍼리퀴드 공개 API로 실시간 조회한다.
+create table if not exists rankers (
+  id uuid primary key default gen_random_uuid(),
+  wallet_address text not null unique,
+  note text, -- 예: "26.09.19 기준 하이퍼리퀴드 PNL 리더보드 3위"
+  created_at timestamptz not null default now()
+);
+
+alter table rankers enable row level security;
