@@ -54,7 +54,7 @@ export default async function Navbar({
         </nav>
 
         <div className="flex shrink-0 items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div className="hidden items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
             {onlineCount}명 접속 중
           </div>
