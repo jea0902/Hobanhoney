@@ -45,7 +45,7 @@ export default async function LogsPage() {
             key={log.id}
             className="rounded-xl border border-gray-100 bg-white p-3 text-sm shadow-sm"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span
                 className={`rounded-md px-2 py-0.5 text-xs font-bold ${
                   log.level === "error" ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-500"
