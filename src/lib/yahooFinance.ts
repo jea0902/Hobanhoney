@@ -1,3 +1,5 @@
+import { logEvent } from "@/lib/logger";
+
 export interface YahooQuote {
   price: number;
   changePercent: number;
@@ -12,12 +14,21 @@ export async function getYahooQuote(symbol: string): Promise<YahooQuote | null> 
     );
     const json = await res.json();
     const meta = json?.chart?.result?.[0]?.meta;
-    if (!meta || typeof meta.regularMarketPrice !== "number") return null;
+    if (!meta || typeof meta.regularMarketPrice !== "number") {
+      logEvent("error", "yahoo_finance", "시세 조회 실패", `symbol=${symbol}`);
+      return null;
+    }
     return {
       price: meta.regularMarketPrice,
       changePercent: meta.regularMarketChangePercent ?? 0,
     };
-  } catch {
+  } catch (error) {
+    logEvent(
+      "error",
+      "yahoo_finance",
+      "시세 조회 중 예외 발생",
+      `symbol=${symbol} ${String(error)}`,
+    );
     return null;
   }
 }

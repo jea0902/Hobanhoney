@@ -1,3 +1,5 @@
+import { logEvent } from "@/lib/logger";
+
 export interface CryptoFearGreed {
   value: number;
   classification: string;
@@ -19,7 +21,10 @@ export async function getCryptoFearGreed(): Promise<CryptoFearGreed | null> {
     });
     const json = await res.json();
     const [today, yesterday] = json?.data ?? [];
-    if (!today) return null;
+    if (!today) {
+      logEvent("error", "alternative_me", "공포탐욕지수 조회 실패", "no data");
+      return null;
+    }
 
     const value = Number(today.value);
     const prevValue = yesterday ? Number(yesterday.value) : value;
@@ -29,7 +34,8 @@ export async function getCryptoFearGreed(): Promise<CryptoFearGreed | null> {
       classification: CLASSIFICATION_KO[today.value_classification] ?? today.value_classification,
       changeFromYesterday: value - prevValue,
     };
-  } catch {
+  } catch (error) {
+    logEvent("error", "alternative_me", "공포탐욕지수 조회 중 예외 발생", String(error));
     return null;
   }
 }

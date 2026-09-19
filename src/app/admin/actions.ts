@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUnrealizedPnl, getReturnRatePercent, getResult } from "@/lib/positionMath";
+import { logEvent } from "@/lib/logger";
 import type { PositionRow } from "@/types/position";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
@@ -69,25 +70,35 @@ function editableStatementFieldsFromForm(formData: FormData) {
 
 export async function createPosition(formData: FormData) {
   const supabase = getSupabase();
+  const traderName = getFormValue(formData, "trader_name");
   const { error } = await supabase.from("positions").insert({
     type: "actual",
-    trader_name: getFormValue(formData, "trader_name"),
+    trader_name: traderName,
     ...editablePositionFieldsFromForm(formData),
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "실제 포지션 생성 실패", `trader=${traderName} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent("info", "admin", "실제 포지션 생성", `trader=${traderName}`);
   redirect("/admin");
 }
 
 export async function createStatement(formData: FormData) {
   const supabase = getSupabase();
+  const traderName = getFormValue(formData, "trader_name");
   const { error } = await supabase.from("positions").insert({
     type: "statement",
-    trader_name: getFormValue(formData, "trader_name"),
+    trader_name: traderName,
     ...editableStatementFieldsFromForm(formData),
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "예측 발언 생성 실패", `trader=${traderName} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent("info", "admin", "예측 발언 생성", `trader=${traderName}`);
   redirect("/admin");
 }
 
@@ -100,7 +111,11 @@ export async function updatePosition(id: string, formData: FormData) {
     .update(editablePositionFieldsFromForm(formData))
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "포지션 수정 실패", `id=${id} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent("info", "admin", "포지션 수정", `id=${id}`);
   redirect("/admin");
 }
 
@@ -111,7 +126,11 @@ export async function updateStatement(id: string, formData: FormData) {
     .update(editableStatementFieldsFromForm(formData))
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "발언 수정 실패", `id=${id} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent("info", "admin", "발언 수정", `id=${id}`);
   redirect("/admin");
 }
 
@@ -119,7 +138,11 @@ export async function deletePosition(id: string) {
   const supabase = getSupabase();
   const { error } = await supabase.from("positions").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "포지션 삭제 실패", `id=${id} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent("info", "admin", "포지션 삭제", `id=${id}`);
   redirect("/admin");
 }
 
@@ -144,6 +167,7 @@ export async function closePosition(id: string) {
   const markPrice = await getMarkPrice(position.symbol);
   if (markPrice === null) {
     // 현재가를 못 가져오면 계산을 진행하지 않는다.
+    logEvent("error", "admin", "빠른 결과 계산 실패", `id=${id} 현재가 조회 실패`);
     redirect("/admin");
   }
 
@@ -159,16 +183,26 @@ export async function closePosition(id: string) {
     position.entry_price,
     position.leverage,
   );
+  const result = getResult(returnRate);
 
   const { error } = await supabase
     .from("positions")
     .update({
-      result: getResult(returnRate),
+      result,
       result_pnl_percent: returnRate,
       result_recorded_at: new Date().toISOString(),
     })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    logEvent("error", "admin", "빠른 결과 계산 저장 실패", `id=${id} ${error.message}`);
+    throw new Error(error.message);
+  }
+  logEvent(
+    "info",
+    "admin",
+    "빠른 결과 계산 완료",
+    `id=${id} result=${result} (${returnRate.toFixed(1)}%)`,
+  );
   redirect("/admin");
 }
