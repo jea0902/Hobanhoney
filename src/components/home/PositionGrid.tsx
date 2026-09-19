@@ -171,16 +171,23 @@ function TraderCell({ trader }: { trader: TraderGroup }) {
   );
 }
 
-function WinRateText({ stats }: { stats: TraderStats }) {
-  if (stats.total === 0) return <span className="text-gray-300">—</span>;
+function WinRateDisplay({ stats }: { stats: TraderStats }) {
+  if (stats.total === 0) return <span className="text-base text-gray-300">—</span>;
   const color = stats.winRate! >= 50 ? "text-red-500" : "text-blue-500";
-  return <span className={`font-bold ${color}`}>{stats.winRate!.toFixed(0)}%</span>;
+  return (
+    <>
+      <p className={`text-base font-bold ${color}`}>{stats.winRate!.toFixed(0)}%</p>
+      <p className="text-xs font-normal text-gray-400">
+        {stats.wins}승 {stats.draws}무 {stats.losses}패
+      </p>
+    </>
+  );
 }
 
 function WinRateCell({ stats }: { stats: TraderStats }) {
   return (
-    <td className="whitespace-nowrap px-4 py-3 text-right text-base">
-      <WinRateText stats={stats} />
+    <td className="whitespace-nowrap px-4 py-3 text-right">
+      <WinRateDisplay stats={stats} />
     </td>
   );
 }
@@ -203,9 +210,9 @@ function TraderCard({
           <Avatar trader={trader} />
           <span className="text-base font-semibold text-gray-900">{trader.traderName}</span>
         </div>
-        <span className="text-sm">
-          <WinRateText stats={trader.stats} />
-        </span>
+        <div className="text-right">
+          <WinRateDisplay stats={trader.stats} />
+        </div>
       </div>
 
       {!row && <p className="mt-3 text-sm text-gray-400">포지션 없음</p>}

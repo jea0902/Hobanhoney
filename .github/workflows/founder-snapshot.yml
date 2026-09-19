@@ -1,0 +1,15 @@
+name: Founder balance snapshot
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call founder-snapshot endpoint
+        run: |
+          curl -sf -X POST https://hobanhoney.win/api/founder-snapshot \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

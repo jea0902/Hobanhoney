@@ -60,3 +60,22 @@ create table if not exists rankers (
 );
 
 alter table rankers enable row level security;
+
+-- 실시간 접속자 수 표시용. 브라우저가 주기적으로 핑을 보내 자기 세션을 갱신하고,
+-- 최근 20초 안에 핑이 온 행 개수를 "현재 접속자 수"로 센다.
+create table if not exists presence (
+  session_id text primary key,
+  last_seen timestamptz not null default now()
+);
+
+alter table presence enable row level security;
+
+-- 주인장 포지션 페이지: Bybit은 6개월치 데이터만 보관하므로, 잔액 그래프를 위해
+-- 주기적으로(6시간마다, GitHub Actions cron) 스냅샷을 직접 쌓아 영구 보관한다.
+create table if not exists balance_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  total_equity numeric not null,
+  recorded_at timestamptz not null default now()
+);
+
+alter table balance_snapshots enable row level security;
