@@ -10,6 +10,10 @@ interface PositionFormValues {
   result_note: string;
 }
 
+const INPUT_CLASS =
+  "rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500";
+const LABEL_CLASS = "text-xs font-medium text-gray-500 dark:text-gray-400";
+
 const FIELDS: {
   name: keyof Omit<PositionFormValues, "direction" | "result">;
   label: string;
@@ -58,20 +62,20 @@ export default function PositionForm({
     <form action={action} className="flex flex-col gap-4">
       {showTraderName && (
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-gray-500">트레이더 이름</span>
+          <span className={LABEL_CLASS}>트레이더 이름</span>
           <input
             type="text"
             name="trader_name"
             placeholder="트레이더 A"
             required
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+            className={INPUT_CLASS}
           />
         </label>
       )}
 
       {FIELDS.map((field) => (
         <label key={field.name} className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-gray-500">{field.label}</span>
+          <span className={LABEL_CLASS}>{field.label}</span>
           <input
             type={field.type}
             step={field.type === "number" ? "any" : undefined}
@@ -80,31 +84,27 @@ export default function PositionForm({
             placeholder={field.placeholder}
             defaultValue={defaultValues?.[field.name] ?? ""}
             required={field.required}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+            className={INPUT_CLASS}
           />
         </label>
       ))}
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-gray-500">방향</span>
+        <span className={LABEL_CLASS}>방향</span>
         <select
           name="direction"
           defaultValue={defaultValues?.direction ?? "Long"}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+          className={INPUT_CLASS}
         >
           <option value="Long">Long</option>
           <option value="Short">Short</option>
         </select>
       </label>
 
-      <div className="border-t border-gray-100 pt-4">
+      <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-gray-500">결과</span>
-          <select
-            name="result"
-            defaultValue={defaultValues?.result ?? ""}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
-          >
+          <span className={LABEL_CLASS}>결과</span>
+          <select name="result" defaultValue={defaultValues?.result ?? ""} className={INPUT_CLASS}>
             <option value="">미청산</option>
             <option value="win">승리</option>
             <option value="draw">무승부</option>
@@ -113,12 +113,12 @@ export default function PositionForm({
         </label>
 
         <label className="mt-3 flex flex-col gap-1">
-          <span className="text-xs font-medium text-gray-500">결과 메모 (선택)</span>
+          <span className={LABEL_CLASS}>결과 메모 (선택)</span>
           <textarea
             name="result_note"
             rows={2}
             defaultValue={defaultValues?.result_note ?? ""}
-            className="resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+            className={`resize-none ${INPUT_CLASS}`}
           />
         </label>
       </div>

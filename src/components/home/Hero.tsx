@@ -5,10 +5,10 @@ export default function Hero() {
 
       <div className="relative mx-auto max-w-6xl">
         <div className="max-w-xl">
-          <p className="text-xs font-semibold tracking-[0.2em] text-gray-800">
+          <p className="text-xs font-semibold tracking-[0.2em] text-gray-800 dark:text-gray-300">
             인간지표 추적 사이트
           </p>
-          <h1 className="mt-3 text-2xl font-extrabold leading-[1.15] tracking-tight text-gray-900 sm:text-5xl">
+          <h1 className="mt-3 text-2xl font-extrabold leading-[1.15] tracking-tight text-gray-900 dark:text-gray-100 sm:text-5xl">
             인간지표 트레이더들의
             <br />
             실시간 포지션 추적

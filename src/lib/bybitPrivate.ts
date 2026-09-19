@@ -26,6 +26,22 @@ async function signedGet(path: string, params: Record<string, string>) {
   return res.json();
 }
 
+// "rows" 배열 + nextPageCursor 형태로 페이지네이션하는 엔드포인트(입출금 내역 등) 공용 헬퍼.
+async function signedGetAllRows<T>(path: string, baseParams: Record<string, string>): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor = "";
+  for (let i = 0; i < 20; i++) {
+    const params = cursor ? { ...baseParams, cursor } : baseParams;
+    const json = await signedGet(path, params);
+    if (json?.retCode !== 0) break;
+    const page = (json?.result?.rows ?? []) as T[];
+    rows.push(...page);
+    cursor = json?.result?.nextPageCursor ?? "";
+    if (!cursor || page.length === 0) break;
+  }
+  return rows;
+}
+
 export interface OwnerBalance {
   totalEquity: number;
   totalWalletBalance: number;
@@ -67,6 +83,7 @@ export interface OwnerPosition {
   positionValue: number;
   unrealizedPnl: number;
   returnOnEquityPercent: number;
+  openedAt: string;
 }
 
 interface RawOwnerPosition {
@@ -80,6 +97,7 @@ interface RawOwnerPosition {
   positionValue: string;
   positionIM: string;
   unrealisedPnl: string;
+  openTime: number;
 }
 
 // USDT 무기한 선물(linear)만 다룬다 — 주인장 계정이 실제로 쓰는 카테고리.
@@ -114,10 +132,139 @@ export async function getOwnerPositions(): Promise<OwnerPosition[] | null> {
         positionValue: Number(position.positionValue),
         unrealizedPnl,
         returnOnEquityPercent: positionIM > 0 ? (unrealizedPnl / positionIM) * 100 : 0,
+        openedAt: new Date(position.openTime).toISOString(),
       };
     });
   } catch (error) {
     logEvent("error", "bybit_private", "주인장 포지션 조회 중 예외 발생", String(error));
+    return null;
+  }
+}
+
+export interface CashFlowRecord {
+  txId: string;
+  type: "deposit" | "withdraw";
+  coin: string;
+  amount: number;
+  occurredAt: string;
+}
+
+interface RawDepositRecord {
+  coin: string;
+  amount: string;
+  txID: string;
+  successAt: string;
+  status: number;
+}
+
+// startTime~endTime은 최대 30일 구간만 허용됨(Bybit 제약).
+export async function getDeposits(
+  startTime: number,
+  endTime: number,
+): Promise<CashFlowRecord[] | null> {
+  try {
+    const rows = await signedGetAllRows<RawDepositRecord>("/v5/asset/deposit/query-record", {
+      startTime: String(startTime),
+      endTime: String(endTime),
+      limit: "50",
+    });
+    return rows
+      .filter((row) => row.status === 3) // 3 = 입금 성공
+      .map((row) => ({
+        txId: row.txID,
+        type: "deposit" as const,
+        coin: row.coin,
+        amount: Number(row.amount),
+        occurredAt: new Date(Number(row.successAt)).toISOString(),
+      }));
+  } catch (error) {
+    logEvent("error", "bybit_private", "입금 내역 조회 중 예외 발생", String(error));
+    return null;
+  }
+}
+
+interface RawWithdrawRecord {
+  coin: string;
+  amount: string;
+  txID: string;
+  updateTime: string;
+  status: string;
+}
+
+// startTime~endTime은 최대 30일 구간만 허용됨(Bybit 제약).
+export async function getWithdrawals(
+  startTime: number,
+  endTime: number,
+): Promise<CashFlowRecord[] | null> {
+  try {
+    const rows = await signedGetAllRows<RawWithdrawRecord>("/v5/asset/withdraw/query-record", {
+      startTime: String(startTime),
+      endTime: String(endTime),
+      limit: "50",
+    });
+    return rows
+      .filter((row) => row.status === "success")
+      .map((row) => ({
+        txId: row.txID,
+        type: "withdraw" as const,
+        coin: row.coin,
+        amount: Number(row.amount),
+        occurredAt: new Date(Number(row.updateTime)).toISOString(),
+      }));
+  } catch (error) {
+    logEvent("error", "bybit_private", "출금 내역 조회 중 예외 발생", String(error));
+    return null;
+  }
+}
+
+export interface ClosedTradeRecord {
+  orderId: string;
+  symbol: string;
+  closedPnl: number;
+  direction: Direction;
+  closedAt: string;
+}
+
+interface RawClosedPnl {
+  orderId: string;
+  symbol: string;
+  closedPnl: string;
+  side: "Buy" | "Sell";
+  updatedTime: string;
+}
+
+// startTime~endTime은 최대 7일 구간만 허용됨(Bybit 제약). USDT 무기한 선물만 다룬다.
+export async function getClosedPnl(
+  startTime: number,
+  endTime: number,
+): Promise<ClosedTradeRecord[] | null> {
+  try {
+    const rows: RawClosedPnl[] = [];
+    let cursor = "";
+    for (let i = 0; i < 20; i++) {
+      const params: Record<string, string> = {
+        category: "linear",
+        startTime: String(startTime),
+        endTime: String(endTime),
+        limit: "100",
+      };
+      if (cursor) params.cursor = cursor;
+      const json = await signedGet("/v5/position/closed-pnl", params);
+      if (json?.retCode !== 0) break;
+      const page = (json?.result?.list ?? []) as RawClosedPnl[];
+      rows.push(...page);
+      cursor = json?.result?.nextPageCursor ?? "";
+      if (!cursor || page.length === 0) break;
+    }
+    return rows.map((row) => ({
+      orderId: row.orderId,
+      symbol: row.symbol,
+      closedPnl: Number(row.closedPnl),
+      direction: row.side === "Buy" ? ("Long" as Direction) : ("Short" as Direction),
+      closedAt: new Date(Number(row.updatedTime)).toISOString(),
+    }));
+  } catch (error) {
+    logEvent("error", "bybit_private", "청산 거래 내역 조회 중 예외 발생", String(error));
     return null;
   }
 }

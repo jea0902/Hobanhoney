@@ -84,7 +84,7 @@ export default async function MarketTicker() {
   if (items.length === 0) return null;
 
   return (
-    <div className="overflow-hidden border-y border-gray-100 bg-white py-4">
+    <div className="overflow-hidden border-y border-gray-100 bg-white py-4 dark:border-gray-800 dark:bg-gray-950">
       <div className="flex w-max animate-marquee gap-12">
         {[...items, ...items].map((item, index) => (
           <TickerEntry key={index} {...item} />
@@ -99,8 +99,8 @@ function TickerEntry({ label, value, delta, up }: TickerItem) {
 
   return (
     <div className="flex shrink-0 items-center gap-2.5 whitespace-nowrap text-base">
-      <span className="font-semibold text-gray-700">{label}</span>
-      <span className="font-extrabold text-gray-900">{value}</span>
+      <span className="font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+      <span className="font-extrabold text-gray-900 dark:text-gray-100">{value}</span>
       <span className={`font-bold ${color}`}>
         {up ? "▲" : "▼"} {delta}
       </span>
