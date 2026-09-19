@@ -33,6 +33,17 @@ function formatKrw(n: number) {
   return `${sign}${Math.round(n).toLocaleString("ko-KR")}`;
 }
 
+// 실제 포지션(row.type === "actual")의 수익률/손익을 계산한다. 테이블/카드 뷰 양쪽에서 씀.
+function getActualStats(row: PositionRow, markPrice: number | null, usdtKrwRate: number | null) {
+  if (markPrice === null) {
+    return { returnRate: null, pnl: null, pnlKrw: null };
+  }
+  const pnl = getUnrealizedPnl(row.direction, row.quantity!, row.entry_price!, markPrice);
+  const returnRate = getReturnRatePercent(pnl, row.quantity!, row.entry_price!, row.leverage!);
+  const pnlKrw = usdtKrwRate !== null ? pnl * usdtKrwRate : null;
+  return { returnRate, pnl, pnlKrw };
+}
+
 const TABLE_HEADERS = [
   "트레이더",
   "종목",
@@ -84,73 +95,170 @@ export default async function PositionGrid() {
   ]);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <table className="w-full min-w-[720px] border-collapse">
-        <thead>
-          <tr className="border-b border-gray-100">
-            {TABLE_HEADERS.map((header, index) => (
-              <th
-                key={header}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-400 ${
-                  index === 0 ? "text-left" : index === 1 ? "text-left" : "text-right"
-                }`}
-              >
-                {header}
-              </th>
+    <>
+      {/* 모바일: 카드형 */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        {tradersWithMarkPrice.map(({ trader, markPrice }) => (
+          <TraderCard
+            key={trader.traderName}
+            trader={trader}
+            markPrice={markPrice}
+            usdtKrwRate={usdtKrwRate}
+          />
+        ))}
+      </div>
+
+      {/* 데스크탑: 테이블형 */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm sm:block">
+        <table className="w-full min-w-[720px] border-collapse">
+          <thead>
+            <tr className="border-b border-gray-100">
+              {TABLE_HEADERS.map((header, index) => (
+                <th
+                  key={header}
+                  className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-400 ${
+                    index === 0 ? "text-left" : index === 1 ? "text-left" : "text-right"
+                  }`}
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tradersWithMarkPrice.map(({ trader, markPrice }) => (
+              <TraderRow
+                key={trader.traderName}
+                trader={trader}
+                markPrice={markPrice}
+                usdtKrwRate={usdtKrwRate}
+              />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tradersWithMarkPrice.map(({ trader, markPrice }) => (
-            <TraderRow
-              key={trader.traderName}
-              trader={trader}
-              markPrice={markPrice}
-              usdtKrwRate={usdtKrwRate}
-            />
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function Avatar({ trader }: { trader: TraderGroup }) {
+  const avatarInitial = trader.traderName.trim().charAt(0) || "?";
+
+  return trader.traderImage ? (
+    // eslint-disable-next-line @next/next/no-img-element -- 관리자가 임의 외부 URL을 입력하므로 next/image 도메인 화이트리스트 없이 처리
+    <img
+      src={trader.traderImage}
+      alt={trader.traderName}
+      className="h-9 w-9 shrink-0 rounded-full object-cover"
+    />
+  ) : (
+    <div
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getAvatarColor(trader.traderName)}`}
+    >
+      {avatarInitial}
     </div>
   );
 }
 
 function TraderCell({ trader }: { trader: TraderGroup }) {
-  const avatarInitial = trader.traderName.trim().charAt(0) || "?";
-
   return (
     <td className="whitespace-nowrap px-4 py-3">
       <div className="flex items-center gap-2">
-        {trader.traderImage ? (
-          // eslint-disable-next-line @next/next/no-img-element -- 관리자가 임의 외부 URL을 입력하므로 next/image 도메인 화이트리스트 없이 처리
-          <img
-            src={trader.traderImage}
-            alt={trader.traderName}
-            className="h-9 w-9 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${getAvatarColor(trader.traderName)}`}
-          >
-            {avatarInitial}
-          </div>
-        )}
+        <Avatar trader={trader} />
         <span className="text-base font-semibold text-gray-900">{trader.traderName}</span>
       </div>
     </td>
   );
 }
 
-function WinRateCell({ stats }: { stats: TraderStats }) {
-  if (stats.total === 0) {
-    return <td className="whitespace-nowrap px-4 py-3 text-right text-base text-gray-300">—</td>;
-  }
-
+function WinRateText({ stats }: { stats: TraderStats }) {
+  if (stats.total === 0) return <span className="text-gray-300">—</span>;
   const color = stats.winRate! >= 50 ? "text-red-500" : "text-blue-500";
+  return <span className={`font-bold ${color}`}>{stats.winRate!.toFixed(0)}%</span>;
+}
+
+function WinRateCell({ stats }: { stats: TraderStats }) {
   return (
-    <td className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${color}`}>
-      {stats.winRate!.toFixed(0)}%
+    <td className="whitespace-nowrap px-4 py-3 text-right text-base">
+      <WinRateText stats={stats} />
     </td>
+  );
+}
+
+function TraderCard({
+  trader,
+  markPrice,
+  usdtKrwRate,
+}: {
+  trader: TraderGroup;
+  markPrice: number | null;
+  usdtKrwRate: number | null;
+}) {
+  const row = trader.openRow;
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Avatar trader={trader} />
+          <span className="text-base font-semibold text-gray-900">{trader.traderName}</span>
+        </div>
+        <span className="text-sm">
+          <WinRateText stats={trader.stats} />
+        </span>
+      </div>
+
+      {!row && <p className="mt-3 text-sm text-gray-400">포지션 없음</p>}
+
+      {row?.type === "statement" && (
+        <p className="mt-3 text-sm text-gray-700">
+          <span className="line-clamp-2">“{row.quote}”</span>{" "}
+          <span
+            className={`font-semibold ${row.direction === "Long" ? "text-red-500" : "text-blue-500"}`}
+          >
+            예상 {row.direction === "Long" ? "상승" : "하락"}
+          </span>
+        </p>
+      )}
+
+      {row?.type === "actual" &&
+        (() => {
+          const { returnRate, pnl, pnlKrw } = getActualStats(row, markPrice, usdtKrwRate);
+          const directionColor = row.direction === "Long" ? "text-red-500" : "text-blue-500";
+          const returnColor =
+            returnRate === null
+              ? "text-gray-400"
+              : returnRate >= 0
+                ? "text-red-500"
+                : "text-blue-500";
+
+          return (
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700">{row.symbol}</span>
+                <span className={`text-sm font-bold ${directionColor}`}>{row.direction}</span>
+              </div>
+              <p className={`text-xl font-extrabold ${returnColor}`}>
+                {returnRate === null ? "—" : formatPercent(returnRate)}
+              </p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-500">
+                <span>진입 {row.entry_price!.toLocaleString("en-US")}</span>
+                <span>현재 {markPrice === null ? "—" : markPrice.toLocaleString("en-US")}</span>
+                <span className={returnColor}>
+                  손익 {pnl === null ? "—" : `${formatUsdt(pnl)} USDT`}
+                </span>
+                <span className={returnColor}>
+                  {pnlKrw === null ? "—" : `${formatKrw(pnlKrw)}원`}
+                </span>
+                <span>
+                  {row.quantity} · {row.leverage}x
+                </span>
+                <span>경과 {getElapsedMinutes(row.created_at)}분</span>
+              </div>
+            </div>
+          );
+        })()}
+    </div>
   );
 }
 
@@ -204,14 +312,7 @@ function TraderRow({
 
   const isLong = row.direction === "Long";
   const directionColor = isLong ? "text-red-500" : "text-blue-500";
-
-  let returnRate: number | null = null;
-  let pnl: number | null = null;
-  if (markPrice !== null) {
-    pnl = getUnrealizedPnl(row.direction, row.quantity!, row.entry_price!, markPrice);
-    returnRate = getReturnRatePercent(pnl, row.quantity!, row.entry_price!, row.leverage!);
-  }
-  const pnlKrw = pnl !== null && usdtKrwRate !== null ? pnl * usdtKrwRate : null;
+  const { returnRate, pnl, pnlKrw } = getActualStats(row, markPrice, usdtKrwRate);
   const returnColor =
     returnRate === null ? "text-gray-400" : returnRate >= 0 ? "text-red-500" : "text-blue-500";
 
@@ -237,7 +338,7 @@ function TraderRow({
         {pnl === null ? "—" : formatUsdt(pnl)}
       </td>
       <td className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${returnColor}`}>
-        {pnlKrw === null ? "—" : formatKrw(pnlKrw)}
+        {pnlKrw === null ? "—" : `${formatKrw(pnlKrw)}원`}
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-right text-base text-gray-700">
         {row.quantity} · {row.leverage}x

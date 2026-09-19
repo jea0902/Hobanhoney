@@ -80,12 +80,12 @@ export default async function AdminPage() {
         <div className="flex flex-col gap-3">
           <h2 className="text-sm font-bold text-gray-900">진행 중</h2>
           <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-            <table className="w-full min-w-[560px] border-collapse">
+            <table className="w-full min-w-[320px] border-collapse sm:min-w-[560px]">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
                   <th className="px-4 py-3">트레이더</th>
                   <th className="px-4 py-3">내용</th>
-                  <th className="px-4 py-3">세부</th>
+                  <th className="hidden px-4 py-3 sm:table-cell">세부</th>
                   <th className="px-4 py-3 text-right">관리</th>
                 </tr>
               </thead>
@@ -96,7 +96,7 @@ export default async function AdminPage() {
                       {position.trader_name}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{positionSummary(position)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-gray-500 sm:table-cell">
                       {positionDetail(position)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
@@ -127,7 +127,7 @@ export default async function AdminPage() {
             <div key={traderName} className="flex flex-col gap-2">
               <h3 className="text-xs font-semibold text-gray-500">{traderName}</h3>
               <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-                <table className="w-full min-w-[480px] border-collapse">
+                <table className="w-full min-w-[300px] border-collapse sm:min-w-[480px]">
                   <tbody>
                     {rows.map((position) => (
                       <tr key={position.id} className="border-b border-gray-50 last:border-0">
@@ -137,7 +137,7 @@ export default async function AdminPage() {
                         <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">
                           {RESULT_LABEL[position.result!]}
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-400">
+                        <td className="hidden px-4 py-3 text-xs text-gray-400 sm:table-cell">
                           {position.result_note ?? ""}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
