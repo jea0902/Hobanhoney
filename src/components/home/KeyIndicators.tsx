@@ -141,8 +141,8 @@ export default async function KeyIndicators() {
   return (
     <section className="px-6 py-10">
       <div className="mx-auto max-w-6xl">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-900">
-          주요 지표 <span className="text-gray-300">→</span>
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-gray-100">
+          주요 지표 <span className="text-gray-300 dark:text-gray-600">→</span>
         </h2>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -159,12 +159,14 @@ function IndicatorCard({ label, value, delta, up, source, description }: Indicat
   const color = up ? "text-red-500" : "text-blue-500";
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-1.5">
         <span className={`h-1.5 w-1.5 rounded-full ${up ? "bg-red-400" : "bg-blue-400"}`} />
         <p className="truncate text-xs text-gray-400">{label}</p>
       </div>
-      <p className="mt-2 truncate text-lg font-extrabold text-gray-900">{value}</p>
+      <p className="mt-2 truncate text-lg font-extrabold text-gray-900 dark:text-gray-100">
+        {value}
+      </p>
       {delta && (
         <p className={`truncate text-xs font-semibold ${color}`}>
           {up ? "▲" : "▼"} {delta}
@@ -173,7 +175,9 @@ function IndicatorCard({ label, value, delta, up, source, description }: Indicat
       {description && (
         <p className="mt-1.5 text-[10px] leading-snug text-gray-400">{description}</p>
       )}
-      {source && <p className="mt-1 text-[10px] text-gray-300">출처: {source}</p>}
+      {source && (
+        <p className="mt-1 text-[10px] text-gray-300 dark:text-gray-600">출처: {source}</p>
+      )}
     </div>
   );
 }

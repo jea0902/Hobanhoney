@@ -3,6 +3,9 @@ import { addRanker, deleteRanker } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+const INPUT_CLASS =
+  "rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500";
+
 interface RankerRow {
   id: string;
   wallet_address: string;
@@ -21,33 +24,30 @@ export default async function RankersAdminPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div>
-        <h1 className="text-lg font-bold text-gray-900">랭커 관리</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">랭커 관리</h1>
         <p className="mt-1 text-xs text-gray-400">
           지갑 주소만 등록하면 포지션은 하이퍼리퀴드에서 실시간으로 가져와요.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-bold text-gray-900">지갑 주소 추가</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+        <h2 className="mb-3 text-sm font-bold text-gray-900 dark:text-gray-100">지갑 주소 추가</h2>
         <form action={addRanker} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-gray-500">지갑 주소</span>
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">지갑 주소</span>
             <input
               type="text"
               name="wallet_address"
               placeholder="0x..."
               required
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+              className={INPUT_CLASS}
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-gray-500">비고 (선택)</span>
-            <input
-              type="text"
-              name="note"
-              placeholder="PNL 3위"
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
-            />
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              비고 (선택)
+            </span>
+            <input type="text" name="note" placeholder="PNL 3위" className={INPUT_CLASS} />
           </label>
           <button
             type="submit"
@@ -59,7 +59,7 @@ export default async function RankersAdminPage() {
       </div>
 
       {rankers.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400">
+        <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
           아직 등록된 랭커가 없어요.
         </p>
       )}
@@ -68,13 +68,15 @@ export default async function RankersAdminPage() {
         {rankers.map((ranker) => (
           <li
             key={ranker.id}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-gray-900">
+              <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {ranker.wallet_address}
               </p>
-              {ranker.note && <p className="truncate text-xs text-gray-400">{ranker.note}</p>}
+              {ranker.note && (
+                <p className="truncate text-xs text-gray-400 dark:text-gray-500">{ranker.note}</p>
+              )}
             </div>
             <form action={deleteRanker.bind(null, ranker.id)} className="shrink-0">
               <button type="submit" className="text-sm font-medium text-red-500 underline">

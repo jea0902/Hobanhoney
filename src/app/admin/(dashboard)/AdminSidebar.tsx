@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "유튜버 포지션" },
@@ -18,10 +19,13 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="flex items-center gap-2 px-2 py-2">
-        {/* eslint-disable-next-line @next/next/no-img-element -- public/logo.png는 next/image 최적화가 필요 없는 작은 정적 로고 */}
-        <img src="/logo.png" alt="호반꿀" className="h-8 w-8 object-contain" />
-        <span className="text-sm font-bold text-gray-900">호반꿀 관리자</span>
+      <div className="flex items-center justify-between gap-2 px-2 py-2">
+        <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element -- public/logo.png는 next/image 최적화가 필요 없는 작은 정적 로고 */}
+          <img src="/logo.png" alt="호반꿀" className="h-8 w-8 object-contain" />
+          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">호반꿀 관리자</span>
+        </div>
+        <ThemeToggle />
       </div>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1">
@@ -30,7 +34,7 @@ function SidebarContent({
             key={item.href}
             href={item.href}
             onClick={onNavigate}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
           >
             {item.label}
           </Link>
@@ -40,7 +44,7 @@ function SidebarContent({
       <form action={logoutAction}>
         <button
           type="submit"
-          className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+          className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         >
           로그아웃
         </button>
@@ -59,7 +63,7 @@ export default function AdminSidebar({
   return (
     <>
       {/* 데스크탑: 항상 고정 표시 */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-gray-200 bg-white p-4 sm:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 sm:flex">
         <SidebarContent logoutAction={logoutAction} />
       </aside>
 
@@ -68,7 +72,7 @@ export default function AdminSidebar({
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label="메뉴 열기"
-        className="fixed left-4 top-4 z-30 rounded-lg border border-gray-200 bg-white p-2 shadow-sm sm:hidden"
+        className="fixed left-4 top-4 z-30 rounded-lg border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:hidden"
       >
         <MenuIcon />
       </button>
@@ -80,7 +84,7 @@ export default function AdminSidebar({
             onClick={() => setIsOpen(false)}
             className="absolute inset-0 bg-black/30"
           />
-          <aside className="relative flex h-full w-64 flex-col bg-white p-4 shadow-lg">
+          <aside className="relative flex h-full w-64 flex-col bg-white p-4 shadow-lg dark:bg-gray-900">
             <SidebarContent logoutAction={logoutAction} onNavigate={() => setIsOpen(false)} />
           </aside>
         </div>
@@ -98,7 +102,7 @@ function MenuIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      className="text-gray-600"
+      className="text-gray-600 dark:text-gray-300"
       aria-hidden="true"
     >
       <line x1="4" y1="6" x2="20" y2="6" />

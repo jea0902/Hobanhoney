@@ -45,7 +45,7 @@ export default async function AdminPage() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div>
-        <h1 className="text-lg font-bold text-gray-900">유튜버 포지션 관리</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">유튜버 포지션 관리</h1>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -71,18 +71,18 @@ export default async function AdminPage() {
       </div>
 
       {positions.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400">
+        <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
           아직 등록된 포지션이 없어요.
         </p>
       )}
 
       {openPositions.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-bold text-gray-900">진행 중</h2>
-          <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">진행 중</h2>
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <table className="w-full min-w-[320px] border-collapse sm:min-w-[560px]">
               <thead>
-                <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400">
+                <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-400 dark:border-gray-800 dark:text-gray-500">
                   <th className="px-4 py-3">트레이더</th>
                   <th className="px-4 py-3">내용</th>
                   <th className="hidden px-4 py-3 sm:table-cell">세부</th>
@@ -91,18 +91,23 @@ export default async function AdminPage() {
               </thead>
               <tbody>
                 {openPositions.map((position) => (
-                  <tr key={position.id} className="border-b border-gray-50 last:border-0">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">
+                  <tr
+                    key={position.id}
+                    className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {position.trader_name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{positionSummary(position)}</td>
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-gray-500 sm:table-cell">
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      {positionSummary(position)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400 sm:table-cell">
                       {positionDetail(position)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
                       <Link
                         href={`/admin/${position.id}`}
-                        className="mr-3 font-medium text-gray-600 underline"
+                        className="mr-3 font-medium text-gray-600 underline dark:text-gray-300"
                       >
                         수정
                       </Link>
@@ -122,22 +127,27 @@ export default async function AdminPage() {
 
       {closedByTrader.size > 0 && (
         <div className="flex flex-col gap-4">
-          <h2 className="text-sm font-bold text-gray-900">지난 기록</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">지난 기록</h2>
           {[...closedByTrader.entries()].map(([traderName, rows]) => (
             <div key={traderName} className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold text-gray-500">{traderName}</h3>
-              <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                {traderName}
+              </h3>
+              <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
                 <table className="w-full min-w-[300px] border-collapse sm:min-w-[480px]">
                   <tbody>
                     {rows.map((position) => (
-                      <tr key={position.id} className="border-b border-gray-50 last:border-0">
-                        <td className="px-4 py-3 text-sm text-gray-700">
+                      <tr
+                        key={position.id}
+                        className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                      >
+                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                           {positionSummary(position)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
                           {RESULT_LABEL[position.result!]}
                         </td>
-                        <td className="hidden px-4 py-3 text-xs text-gray-400 sm:table-cell">
+                        <td className="hidden px-4 py-3 text-xs text-gray-400 dark:text-gray-500 sm:table-cell">
                           {position.result_note ?? ""}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
@@ -162,9 +172,9 @@ export default async function AdminPage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <p className="text-xs text-gray-400">{label}</p>
-      <p className="mt-2 text-xl font-extrabold text-gray-900">{value}</p>
+      <p className="mt-2 text-xl font-extrabold text-gray-900 dark:text-gray-100">{value}</p>
     </div>
   );
 }

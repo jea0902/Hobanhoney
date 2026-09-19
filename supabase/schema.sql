@@ -70,7 +70,7 @@ create table if not exists presence (
 
 alter table presence enable row level security;
 
--- 주인장 포지션 페이지: Bybit은 6개월치 데이터만 보관하므로, 잔액 그래프를 위해
+-- 운영자 포지션 페이지: Bybit은 6개월치 데이터만 보관하므로, 잔액 그래프를 위해
 -- 주기적으로(6시간마다, GitHub Actions cron) 스냅샷을 직접 쌓아 영구 보관한다.
 create table if not exists balance_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -79,3 +79,28 @@ create table if not exists balance_snapshots (
 );
 
 alter table balance_snapshots enable row level security;
+
+-- 운영자 포지션 페이지: Bybit 입출금 내역도 6개월 지나면 사라지므로 영구 보관한다.
+create table if not exists cash_flows (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('deposit', 'withdraw')),
+  coin text not null,
+  amount numeric not null,
+  tx_id text not null unique,
+  occurred_at timestamptz not null
+);
+
+alter table cash_flows enable row level security;
+
+-- 주인장 포지션 페이지: 승률 계산용. closed-pnl API는 한 번에 최대 7일치만 조회되므로
+-- 영구 저장해두고 우리 DB에서 집계한다.
+create table if not exists closed_trades (
+  id uuid primary key default gen_random_uuid(),
+  symbol text not null,
+  closed_pnl numeric not null,
+  order_id text not null unique,
+  closed_at timestamptz not null
+);
+
+alter table closed_trades enable row level security;
+alter table closed_trades add column if not exists direction text check (direction in ('Long', 'Short'));

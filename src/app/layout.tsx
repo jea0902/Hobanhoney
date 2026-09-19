@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,8 +15,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const theme = cookies().get("theme")?.value;
+
   return (
-    <html lang="ko">
+    <html lang="ko" className={theme === "dark" ? "dark" : ""}>
       <body>{children}</body>
     </html>
   );
