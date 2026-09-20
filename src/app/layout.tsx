@@ -29,6 +29,11 @@ export const metadata: Metadata = {
     description,
     images: ["/logo.png"],
   },
+  verification: {
+    other: {
+      "naver-site-verification": "b825c6691807dd6527de7f69dd6d0fdf375929b7",
+    },
+  },
 };
 
 export default function RootLayout({
