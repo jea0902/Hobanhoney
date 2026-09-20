@@ -45,7 +45,7 @@ export default async function FounderPage() {
         <div className="mx-auto max-w-6xl">
           <h1 className="mb-1 text-lg font-bold text-gray-900 dark:text-gray-100">운영자 포지션</h1>
           <p className="mb-4 text-sm text-gray-400">
-            사이트 만든 사람이 직접 실전 트레이딩하는 바이비트 계정 API를 통해 실시간으로 가져오는
+            사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로 가져오는
             정보 (26.03.06부터 추적)
           </p>
 
