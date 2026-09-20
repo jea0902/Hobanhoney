@@ -1,4 +1,5 @@
 import { createHmac } from "crypto";
+import { unstable_cache } from "next/cache";
 import { logEvent } from "@/lib/logger";
 import type { Direction } from "@/types/position";
 
@@ -21,6 +22,8 @@ async function signedGet(path: string, params: Record<string, string>) {
       "X-BAPI-TIMESTAMP": timestamp,
       "X-BAPI-RECV-WINDOW": RECV_WINDOW,
     },
+    // 매 호출마다 timestamp/서명 헤더가 달라져서 fetch 자체 캐싱(next.revalidate)은 키가
+    // 매번 달라져 무의미함 — 캐싱은 아래 getOwnerBalance/getOwnerPositions에서 unstable_cache로 처리.
     cache: "no-store",
   });
   return res.json();
@@ -48,29 +51,35 @@ export interface OwnerBalance {
   totalUnrealizedPnl: number;
 }
 
-export async function getOwnerBalance(): Promise<OwnerBalance | null> {
-  try {
-    const json = await signedGet("/v5/account/wallet-balance", { accountType: "UNIFIED" });
-    const account = json?.result?.list?.[0];
-    if (json?.retCode !== 0 || !account) {
-      logEvent(
-        "error",
-        "bybit_private",
-        "주인장 잔액 조회 실패",
-        JSON.stringify(json).slice(0, 300),
-      );
+// 홈/founder 페이지가 방문자마다 이 함수를 호출하므로, 트래픽이 몰려도 바이비트 요청제한에
+// 안 걸리게 10초간 결과를 재사용한다. (내부 fetch는 헤더가 매번 달라 자체 캐싱이 안 먹혀서 여기서 처리)
+export const getOwnerBalance = unstable_cache(
+  async (): Promise<OwnerBalance | null> => {
+    try {
+      const json = await signedGet("/v5/account/wallet-balance", { accountType: "UNIFIED" });
+      const account = json?.result?.list?.[0];
+      if (json?.retCode !== 0 || !account) {
+        logEvent(
+          "error",
+          "bybit_private",
+          "주인장 잔액 조회 실패",
+          JSON.stringify(json).slice(0, 300),
+        );
+        return null;
+      }
+      return {
+        totalEquity: Number(account.totalEquity),
+        totalWalletBalance: Number(account.totalWalletBalance),
+        totalUnrealizedPnl: Number(account.totalPerpUPL),
+      };
+    } catch (error) {
+      logEvent("error", "bybit_private", "주인장 잔액 조회 중 예외 발생", String(error));
       return null;
     }
-    return {
-      totalEquity: Number(account.totalEquity),
-      totalWalletBalance: Number(account.totalWalletBalance),
-      totalUnrealizedPnl: Number(account.totalPerpUPL),
-    };
-  } catch (error) {
-    logEvent("error", "bybit_private", "주인장 잔액 조회 중 예외 발생", String(error));
-    return null;
-  }
-}
+  },
+  ["bybit-owner-balance"],
+  { revalidate: 10 },
+);
 
 export interface OwnerPosition {
   symbol: string;
@@ -101,45 +110,50 @@ interface RawOwnerPosition {
 }
 
 // USDT 무기한 선물(linear)만 다룬다 — 주인장 계정이 실제로 쓰는 카테고리.
-export async function getOwnerPositions(): Promise<OwnerPosition[] | null> {
-  try {
-    const json = await signedGet("/v5/position/list", {
-      category: "linear",
-      settleCoin: "USDT",
-    });
-    const list = json?.result?.list as RawOwnerPosition[] | undefined;
-    if (json?.retCode !== 0 || !Array.isArray(list)) {
-      logEvent(
-        "error",
-        "bybit_private",
-        "주인장 포지션 조회 실패",
-        JSON.stringify(json).slice(0, 300),
-      );
+// getOwnerBalance와 같은 이유로 10초간 결과를 재사용한다(홈/founder 페이지 방문마다 호출됨).
+export const getOwnerPositions = unstable_cache(
+  async (): Promise<OwnerPosition[] | null> => {
+    try {
+      const json = await signedGet("/v5/position/list", {
+        category: "linear",
+        settleCoin: "USDT",
+      });
+      const list = json?.result?.list as RawOwnerPosition[] | undefined;
+      if (json?.retCode !== 0 || !Array.isArray(list)) {
+        logEvent(
+          "error",
+          "bybit_private",
+          "주인장 포지션 조회 실패",
+          JSON.stringify(json).slice(0, 300),
+        );
+        return null;
+      }
+
+      return list.map((position) => {
+        const positionIM = Number(position.positionIM || 0);
+        const unrealizedPnl = Number(position.unrealisedPnl);
+        return {
+          symbol: position.symbol,
+          direction: position.side === "Buy" ? "Long" : ("Short" as Direction),
+          quantity: Number(position.size),
+          entryPrice: Number(position.avgPrice),
+          currentPrice: Number(position.markPrice),
+          leverage: Number(position.leverage),
+          liquidationPrice: position.liqPrice ? Number(position.liqPrice) : null,
+          positionValue: Number(position.positionValue),
+          unrealizedPnl,
+          returnOnEquityPercent: positionIM > 0 ? (unrealizedPnl / positionIM) * 100 : 0,
+          openedAt: new Date(position.openTime).toISOString(),
+        };
+      });
+    } catch (error) {
+      logEvent("error", "bybit_private", "주인장 포지션 조회 중 예외 발생", String(error));
       return null;
     }
-
-    return list.map((position) => {
-      const positionIM = Number(position.positionIM || 0);
-      const unrealizedPnl = Number(position.unrealisedPnl);
-      return {
-        symbol: position.symbol,
-        direction: position.side === "Buy" ? "Long" : ("Short" as Direction),
-        quantity: Number(position.size),
-        entryPrice: Number(position.avgPrice),
-        currentPrice: Number(position.markPrice),
-        leverage: Number(position.leverage),
-        liquidationPrice: position.liqPrice ? Number(position.liqPrice) : null,
-        positionValue: Number(position.positionValue),
-        unrealizedPnl,
-        returnOnEquityPercent: positionIM > 0 ? (unrealizedPnl / positionIM) * 100 : 0,
-        openedAt: new Date(position.openTime).toISOString(),
-      };
-    });
-  } catch (error) {
-    logEvent("error", "bybit_private", "주인장 포지션 조회 중 예외 발생", String(error));
-    return null;
-  }
-}
+  },
+  ["bybit-owner-positions"],
+  { revalidate: 10 },
+);
 
 export interface CashFlowRecord {
   txId: string;
