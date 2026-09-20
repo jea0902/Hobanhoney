@@ -123,7 +123,7 @@ export default async function PositionGrid() {
 
   const founderGroup: TraderGroup = {
     traderName: FOUNDER_NAME,
-    traderImage: "/logo.png",
+    traderImage: "/hodu-short.png",
     rows: [],
     openRow: founderTopPosition ? founderRowFromPosition(founderTopPosition) : null,
     stats: {

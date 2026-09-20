@@ -105,9 +105,13 @@ export default function BalanceChart({
 
   const hasMarkers = depositIndexes.size > 0 || withdrawIndexes.size > 0;
 
-  // "26.03.06" 라벨 하나가 대략 55px 필요 — 실제 그래프 너비 기준으로 안 겹칠 개수만 보여준다.
+  // "26.03.06" 라벨 하나가 대략 55px 필요 — 실제 라벨이 배치되는 플롯 영역(전체 너비에서
+  // Y축 너비 60px + 좌우 여백을 뺀 부분) 기준으로 안 겹칠 개수만 보여준다.
   // (너비를 아직 못 쟀으면 일단 4개로 보수적으로 시작, 측정되는 즉시 재계산됨)
-  const maxTicksThatFit = chartWidth > 0 ? Math.max(2, Math.floor(chartWidth / 55)) : 4;
+  const Y_AXIS_WIDTH = 60;
+  const CHART_MARGIN_X = 10;
+  const plotWidth = Math.max(0, chartWidth - Y_AXIS_WIDTH - CHART_MARGIN_X);
+  const maxTicksThatFit = chartWidth > 0 ? Math.max(2, Math.floor(plotWidth / 55)) : 4;
   const desiredTicks = Math.min(8, maxTicksThatFit);
   const tickInterval = Math.max(0, Math.ceil(data.length / desiredTicks) - 1);
 
@@ -135,7 +139,7 @@ export default function BalanceChart({
               tick={{ fontSize: 12, fill: tickColor }}
               axisLine={false}
               tickLine={false}
-              width={60}
+              width={Y_AXIS_WIDTH}
               domain={[
                 (min: number) => Math.max(0, Math.floor(min * 0.9)),
                 (max: number) => Math.ceil(max * 1.05),
