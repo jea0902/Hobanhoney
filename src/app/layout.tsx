@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import Script from "next/script";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -47,18 +46,17 @@ export default function RootLayout({
 
   return (
     <html lang="ko" className={theme === "dark" ? "dark" : ""}>
-      <body>
-        {/* beforeInteractive는 Script 위치와 무관하게 Next.js가 문서 head에 넣어준다 — 애드센스 사이트 소유확인 요구사항 */}
+      <head>
+        {/* 애드센스 사이트 소유확인 크롤러가 렌더링 없이 원본 스니펫 그대로를 찾아서, next/script 없이 직접 넣는다 */}
         {adsenseClientId && (
-          <Script
+          <script
             async
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
             crossOrigin="anonymous"
-            strategy="beforeInteractive"
           />
         )}
-        {children}
-      </body>
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
