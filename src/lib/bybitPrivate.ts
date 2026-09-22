@@ -236,6 +236,7 @@ export interface ClosedTradeRecord {
   symbol: string;
   closedPnl: number;
   direction: Direction;
+  avgEntryPrice: number;
   closedAt: string;
 }
 
@@ -243,7 +244,10 @@ interface RawClosedPnl {
   orderId: string;
   symbol: string;
   closedPnl: string;
+  // side는 "원래 포지션 방향"이 아니라 "청산 주문 방향"이다 (Buy로 청산 = 원래 Short였던 포지션).
+  // 실제 데이터로 검증: side=Sell, 청산가>진입가인데 손익이 플러스였음 → 그 경우는 롱이어야 맞는 계산.
   side: "Buy" | "Sell";
+  avgEntryPrice: string;
   updatedTime: string;
 }
 
@@ -274,7 +278,8 @@ export async function getClosedPnl(
       orderId: row.orderId,
       symbol: row.symbol,
       closedPnl: Number(row.closedPnl),
-      direction: row.side === "Buy" ? ("Long" as Direction) : ("Short" as Direction),
+      direction: row.side === "Buy" ? ("Short" as Direction) : ("Long" as Direction),
+      avgEntryPrice: Number(row.avgEntryPrice),
       closedAt: new Date(Number(row.updatedTime)).toISOString(),
     }));
   } catch (error) {
