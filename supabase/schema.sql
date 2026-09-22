@@ -101,6 +101,9 @@ create table if not exists closed_trades (
   order_id text not null unique,
   closed_at timestamptz not null
 );
-
+-- 방향성까지 추적
 alter table closed_trades enable row level security;
 alter table closed_trades add column if not exists direction text check (direction in ('Long', 'Short'));
+
+-- 같은 포지션의 부분청산들을 묶어 승/패를 계산하기 위한 그룹핑 키 (symbol + avg_entry_price)
+alter table closed_trades add column if not exists avg_entry_price numeric;
