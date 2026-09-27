@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { PositionRow } from "../../src/types/position.ts";
-import { POLL_INTERVAL_MS, TRADERS } from "./config.ts";
+import { LIVE_CHECK_INTERVAL_MS, POLL_INTERVAL_MS, TRADERS } from "./config.ts";
 import { closePosition, getOpenRows, logAgent, openPosition, updatePosition } from "./db.ts";
 import { readScreen } from "./gemma.ts";
 import type { ScreenReading } from "./gemma.ts";
@@ -15,6 +15,8 @@ import { fetchLiveThumbnail, getLiveVideoId } from "./youtube.ts";
 const DRY_RUN = process.argv.includes("--dry-run");
 
 interface TraderState {
+  liveVideoId: string | null;
+  liveCheckedAt: number;
   lastImageHash: string | null;
   // 직전 화면. 이번 화면과 같아야(2회 연속 일치) 확정해서 반영한다.
   previousReading: ScreenReading | null;
@@ -30,8 +32,18 @@ function log(traderName: string, message: string) {
 type Trader = (typeof TRADERS)[number];
 
 async function tick(trader: Trader, state: TraderState) {
-  const { traderName, channelHandle, screenHint } = trader;
-  const videoId = await getLiveVideoId(channelHandle);
+  const { traderName, channelId, screenHint } = trader;
+  if (Date.now() - state.liveCheckedAt >= LIVE_CHECK_INTERVAL_MS) {
+    const videoId = await getLiveVideoId(channelId);
+    // 시작 직후 첫 확인과 상태가 바뀔 때만 남겨서, 조용해도 살아 있는지 알 수 있게 한다.
+    if (state.liveCheckedAt === 0 || videoId !== state.liveVideoId) {
+      log(traderName, videoId ? `방송 중 (영상 ${videoId})` : "방송 꺼져 있음");
+    }
+    state.liveCheckedAt = Date.now();
+    state.liveVideoId = videoId;
+  }
+
+  const videoId = state.liveVideoId;
   if (!videoId) {
     // 방송이 꺼져 있으면 마지막으로 확인한 포지션을 유지한다고 본다.
     state.previousReading = null;
@@ -123,6 +135,8 @@ async function apply(
 async function runTrader(trader: Trader) {
   const { traderName } = trader;
   const state: TraderState = {
+    liveVideoId: null,
+    liveCheckedAt: 0,
     lastImageHash: null,
     previousReading: null,
     lastConfirmedAt: new Map(),
