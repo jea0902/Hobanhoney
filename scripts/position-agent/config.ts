@@ -24,5 +24,8 @@ export const POLL_INTERVAL_MS = 60_000;
 // 채널 3개 × 2유닛 × 하루 288번 ≈ 1,700유닛.
 export const LIVE_CHECK_INTERVAL_MS = 5 * 60_000;
 
+// 트레이딩 화면은 보이는데 이만큼 연속으로 못 읽으면(썸네일 5분 간격이라 약 30분) 관리자 로그에 알린다.
+export const FAILED_READINGS_ALERT = 6;
+
 // 무료 등급 하루 한도가 14,400건이라 채택 (Gemini Flash는 하루 20건).
 export const GEMMA_MODEL = "gemma-4-26b-a4b-it";
