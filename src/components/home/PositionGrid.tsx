@@ -106,9 +106,20 @@ export default async function PositionGrid() {
     await Promise.all([
       Promise.all(
         traders.map(async (trader) => {
-          const isOpenActual = trader.openRow?.type === "actual";
-          const markPrice = isOpenActual ? await getMarkPrice(trader.openRow!.symbol!) : null;
-          return { trader, markPrice };
+          // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 규모(수량 × 현재가)가 가장 큰 1개만 보여준다.
+          const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
+          if (openActualRows.length === 0) return { trader, markPrice: null };
+
+          const candidates = await Promise.all(
+            openActualRows.map(async (row) => ({
+              row,
+              markPrice: await getMarkPrice(row.symbol!),
+            })),
+          );
+          const positionValue = (c: (typeof candidates)[number]) =>
+            c.row.quantity! * (c.markPrice ?? c.row.entry_price!);
+          const top = candidates.sort((a, b) => positionValue(b) - positionValue(a))[0];
+          return { trader: { ...trader, openRow: top.row }, markPrice: top.markPrice };
         }),
       ),
       getUsdtKrwRate(),
