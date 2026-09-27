@@ -104,7 +104,10 @@ async function compareWithRow(
   if (sameSize && sameEntry) {
     const changed =
       (position.leverage !== null && position.leverage !== row.leverage) ||
-      (position.liqPrice !== null && position.liqPrice !== row.liquidation_price);
+      // Cross 포지션의 강제청산가는 계좌 잔고에 따라 소수점 단위로 계속 움직여서 1% 넘게 바뀔 때만 반영한다.
+      (position.liqPrice !== null &&
+        (row.liquidation_price === null ||
+          !isClose(position.liqPrice, row.liquidation_price, 0.01)));
     return changed ? [{ kind: "update", row, position, reason: "레버리지/강제청산가 변경" }] : [];
   }
 
