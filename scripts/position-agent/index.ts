@@ -3,7 +3,12 @@
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { PositionRow } from "../../src/types/position.ts";
-import { LIVE_CHECK_INTERVAL_MS, POLL_INTERVAL_MS, TRADERS } from "./config.ts";
+import {
+  FAILED_READINGS_ALERT,
+  LIVE_CHECK_INTERVAL_MS,
+  POLL_INTERVAL_MS,
+  TRADERS,
+} from "./config.ts";
 import { closePosition, getOpenRows, logAgent, openPosition, updatePosition } from "./db.ts";
 import { readScreen } from "./gemma.ts";
 import type { ScreenReading } from "./gemma.ts";
@@ -18,6 +23,7 @@ interface TraderState {
   liveVideoId: string | null;
   liveCheckedAt: number;
   lastImageHash: string | null;
+  failedReadings: number;
   // 직전 화면. 이번 화면과 같아야(2회 연속 일치) 확정해서 반영한다.
   previousReading: ScreenReading | null;
   // 포지션별 마지막으로 확정된 시각과 현재가. 종료가격·추가매수가 검증에 쓴다.
@@ -30,6 +36,16 @@ function log(traderName: string, message: string) {
 }
 
 type Trader = (typeof TRADERS)[number];
+
+// reading이 null(못 읽음)이 아니고, 포지션 화면이 보이고, 숫자 검산까지 통과해야 쓸 수 있다.
+function isUsable(reading: ScreenReading | null): reading is ScreenReading {
+  return (
+    reading !== null &&
+    reading.isTradingScreen &&
+    reading.positionsPanelVisible &&
+    reading.positions.every(isConsistent)
+  );
+}
 
 async function tick(trader: Trader, state: TraderState) {
   const { traderName, channelId, screenHint } = trader;
@@ -56,17 +72,41 @@ async function tick(trader: Trader, state: TraderState) {
   if (hash === state.lastImageHash) return;
   state.lastImageHash = hash;
 
-  const reading = await readScreen(image, screenHint);
-  if (!reading || !reading.isTradingScreen || !reading.positionsPanelVisible) {
+  let reading = await readScreen(image, screenHint);
+  // 방송 화면 배치가 바뀌면 화면 설명이 오히려 틀린 안내가 되므로, 설명 없이 한 번 더 읽어 본다.
+  if (screenHint && !isUsable(reading)) {
+    const retry = await readScreen(image, null);
+    if (isUsable(retry)) {
+      log(traderName, "화면 설명 없이 읽은 결과를 사용 (방송 화면 배치가 바뀌었을 수 있음)");
+      reading = retry;
+    }
+  }
+
+  if (reading && (!reading.isTradingScreen || !reading.positionsPanelVisible)) {
     log(traderName, "포지션 화면이 안 보여서 보류");
     state.previousReading = null;
+    state.failedReadings = 0;
     return;
   }
-  if (!reading.positions.every(isConsistent)) {
-    log(traderName, `숫자 검산 실패로 이 화면은 버림: ${JSON.stringify(reading.positions)}`);
+  if (!isUsable(reading)) {
+    state.failedReadings++;
+    log(
+      traderName,
+      `화면을 못 읽었거나 숫자 검산 실패로 버림 (${state.failedReadings}회 연속): ${JSON.stringify(reading)}`,
+    );
     state.previousReading = null;
+    // 조용히 반영이 멈추지 않도록, 연속 실패가 기준에 닿는 순간 한 번만 관리자 로그에 남긴다.
+    if (state.failedReadings === FAILED_READINGS_ALERT && !DRY_RUN) {
+      await logAgent(
+        "error",
+        `[${traderName}] 트레이딩 화면은 보이는데 ${FAILED_READINGS_ALERT}회 연속 포지션을 못 읽음 — ` +
+          "방송 화면 배치가 바뀌었으면 config.ts의 screenHint를 고쳐 주세요 (Gemma 장애일 수도 있음)",
+        { videoId, reading },
+      );
+    }
     return;
   }
+  state.failedReadings = 0;
 
   const confirmed = state.previousReading !== null && isSameReading(state.previousReading, reading);
   state.previousReading = reading;
@@ -138,6 +178,7 @@ async function runTrader(trader: Trader) {
     liveVideoId: null,
     liveCheckedAt: 0,
     lastImageHash: null,
+    failedReadings: 0,
     previousReading: null,
     lastConfirmedAt: new Map(),
     lastMarkPrice: new Map(),
