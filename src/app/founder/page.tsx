@@ -6,7 +6,8 @@ import { getOwnerBalance, getOwnerPositions } from "@/lib/bybitPrivate";
 import type { OwnerPosition } from "@/lib/bybitPrivate";
 import { getBalanceSnapshots } from "@/lib/balanceSnapshots";
 import { getCashFlows } from "@/lib/cashFlows";
-import { getWinRateStats } from "@/lib/closedTrades";
+import { getMonthlyPnl, getWinRateStats } from "@/lib/closedTrades";
+import MonthlyPerformance from "@/components/founder/MonthlyPerformance";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 
 export const dynamic = "force-dynamic";
@@ -27,14 +28,16 @@ function formatKrw(usd: number, rate: number) {
 }
 
 export default async function FounderPage() {
-  const [balance, positions, snapshots, cashFlows, winRateStats, krwRate] = await Promise.all([
-    getOwnerBalance(),
-    getOwnerPositions(),
-    getBalanceSnapshots(),
-    getCashFlows(),
-    getWinRateStats(),
-    getUsdtKrwRate(),
-  ]);
+  const [balance, positions, snapshots, cashFlows, winRateStats, monthlyPnl, krwRate] =
+    await Promise.all([
+      getOwnerBalance(),
+      getOwnerPositions(),
+      getBalanceSnapshots(),
+      getCashFlows(),
+      getWinRateStats(),
+      getMonthlyPnl(),
+      getUsdtKrwRate(),
+    ]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
@@ -45,8 +48,8 @@ export default async function FounderPage() {
         <div className="mx-auto max-w-6xl">
           <h1 className="mb-1 text-lg font-bold text-gray-900 dark:text-gray-100">운영자 포지션</h1>
           <p className="mb-4 text-sm text-gray-400">
-            사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로 가져오는
-            정보 (26.03.06부터 추적)
+            사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로
+            가져오는 정보 (26.03.06부터 추적)
           </p>
 
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -106,6 +109,16 @@ export default async function FounderPage() {
           <div className="mb-6 flex flex-col gap-3">
             <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">잔액 추이</h2>
             <BalanceChart snapshots={snapshots} cashFlows={cashFlows} />
+          </div>
+
+          <div className="mb-6 flex flex-col gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">월별 성과</h2>
+              <p className="mt-1 text-xs text-gray-400">
+                실현손익 기준 · 시드 = 그 달 말까지 입금 − 출금 누적 (USDT)
+              </p>
+            </div>
+            <MonthlyPerformance monthlyPnl={monthlyPnl} cashFlows={cashFlows} />
           </div>
 
           <div className="mb-6 flex flex-col gap-3">

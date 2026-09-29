@@ -33,11 +33,13 @@ interface ClosedTradeRow {
   direction: "Long" | "Short" | null;
   symbol: string;
   avg_entry_price: number | null;
+  closed_at: string;
 }
 
 interface GroupedTrade {
   pnl: number;
   direction: "Long" | "Short" | null;
+  lastClosedAt: string;
 }
 
 // 포지션 하나가 여러 번 부분청산되면 orderId가 다른 별도 행으로 쌓이는데, 같은 진입가(avgEntryPrice)를
@@ -49,8 +51,13 @@ function groupIntoTrades(rows: ClosedTradeRow[]): GroupedTrade[] {
     const existing = groups.get(key);
     if (existing) {
       existing.pnl += Number(row.closed_pnl);
+      if (row.closed_at > existing.lastClosedAt) existing.lastClosedAt = row.closed_at;
     } else {
-      groups.set(key, { pnl: Number(row.closed_pnl), direction: row.direction });
+      groups.set(key, {
+        pnl: Number(row.closed_pnl),
+        direction: row.direction,
+        lastClosedAt: row.closed_at,
+      });
     }
   }
   return Array.from(groups.values());
@@ -66,7 +73,7 @@ export async function getWinRateStats(): Promise<WinRateStats> {
   const supabase = getSupabase();
   const { data } = await supabase
     .from("closed_trades")
-    .select("closed_pnl, direction, symbol, avg_entry_price");
+    .select("closed_pnl, direction, symbol, avg_entry_price, closed_at");
   const trades = groupIntoTrades((data ?? []) as ClosedTradeRow[]);
 
   return {
@@ -74,4 +81,36 @@ export async function getWinRateStats(): Promise<WinRateStats> {
     long: toStats(trades.filter((trade) => trade.direction === "Long")),
     short: toStats(trades.filter((trade) => trade.direction === "Short")),
   };
+}
+
+// 월 구분은 한국시간 기준. "2026-04" 형태.
+export function toKstMonth(iso: string) {
+  return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);
+}
+
+export interface MonthlyPnl {
+  month: string;
+  profit: number;
+  loss: number;
+  total: number;
+}
+
+// 부분청산이 여러 달에 걸치면 포지션이 최종적으로 끝난 달(마지막 청산 시각)에 합산한다.
+export async function getMonthlyPnl(): Promise<MonthlyPnl[]> {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("closed_trades")
+    .select("closed_pnl, direction, symbol, avg_entry_price, closed_at");
+  const trades = groupIntoTrades((data ?? []) as ClosedTradeRow[]);
+
+  const months = new Map<string, MonthlyPnl>();
+  for (const trade of trades) {
+    const month = toKstMonth(trade.lastClosedAt);
+    const entry = months.get(month) ?? { month, profit: 0, loss: 0, total: 0 };
+    if (trade.pnl > 0) entry.profit += trade.pnl;
+    else entry.loss += trade.pnl;
+    entry.total += trade.pnl;
+    months.set(month, entry);
+  }
+  return Array.from(months.values());
 }
