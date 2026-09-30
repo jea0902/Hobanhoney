@@ -61,7 +61,7 @@ export async function generateMetadata({
   const name = decodeURIComponent(params.name);
   return {
     title: `${name} 포지션 기록과 승률 | 호반꿀`,
-    description: `유튜버 트레이더 ${name}의 실제 포지션 기록, 누적 승률, 롱·숏 성향과 자주 거래한 종목을 정리했습니다.`,
+    description: `유튜버 트레이더 ${name}의 실제 포지션 기록, 누적 승률, 롱·숏 성향, 자주 거래한 종목.`,
   };
 }
 
@@ -103,7 +103,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 {name} 포지션 기록
               </h1>
               <p className="mt-1 text-sm text-gray-400">
-                {formatKstDate(firstRecordedAt)}부터 호반꿀이 추적 중인 유튜버 트레이더
+                {formatKstDate(firstRecordedAt)}부터 추적 중
               </p>
             </div>
           </div>
@@ -111,45 +111,31 @@ export default async function TraderPage({ params }: { params: { name: string } 
           {/* 트레이더마다 다른 요약 문장 — 숫자 표만 있는 페이지보다 읽을 거리를 준다 */}
           <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 text-[15px] leading-7 text-gray-700 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
             <p>
-              {name}의 기록은 총 <strong>{rows.length}건</strong>입니다.
+              총 <strong>{rows.length}건</strong>.
               {stats.total > 0 ? (
                 <>
                   {" "}
-                  결과가 나온 {stats.total}건 중 {stats.wins}승 {stats.draws}무 {stats.losses}패로
-                  누적 승률은 <strong>{stats.winRate!.toFixed(0)}%</strong>입니다.
+                  {stats.wins}승 {stats.draws}무 {stats.losses}패, 승률{" "}
+                  <strong>{stats.winRate!.toFixed(0)}%</strong>.
                 </>
               ) : (
-                " 아직 결과가 나온 포지션이 없습니다."
+                " 아직 결과 나온 포지션 없음."
               )}{" "}
-              방향은 롱 {long.count}건, 숏 {short.count}건으로{" "}
-              {long.count === short.count
-                ? "롱과 숏을 고르게 잡았습니다."
-                : `${mainDirection} 비중이 더 높습니다.`}
+              롱 {long.count}건 · 숏 {short.count}건
+              {long.count === short.count ? "." : `으로 ${mainDirection} 위주.`}
               {symbols.length > 0 && (
                 <>
                   {" "}
-                  가장 많이 거래한 종목은{" "}
-                  {symbols.map(([symbol, count]) => `${symbol}(${count}건)`).join(", ")}
-                  입니다.
+                  많이 거래한 종목은{" "}
+                  {symbols.map(([symbol, count]) => `${symbol}(${count}건)`).join(", ")}.
                 </>
               )}
             </p>
             {stats.total > 0 && stats.total < 10 && (
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                결과가 나온 기록이 아직 10건 미만이라 승률이 우연에 크게 흔들릴 수 있습니다.
+                아직 10건 미만이라 승률은 참고만 해.
               </p>
             )}
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              승패는 종료 시점 수익률 +3% 이상이면 승, -3% 이하이면 패, 그 사이면 무승부로 매깁니다.
-              승률 읽는 법은{" "}
-              <Link
-                href="/guides/human-indicator"
-                className="text-indigo-600 underline dark:text-indigo-400"
-              >
-                인간지표 가이드
-              </Link>
-              를 참고하세요.
-            </p>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -185,7 +171,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 <Link href="/" className="underline">
                   홈
                 </Link>
-                에서 볼 수 있어요.
+                에서 확인해.
               </p>
               <HistoryTable rows={openRows} />
             </div>
@@ -195,14 +181,12 @@ export default async function TraderPage({ params }: { params: { name: string } 
             <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">
               종료된 포지션 기록
             </h2>
-            <p className="mt-1 text-xs text-gray-400">
-              최신순 · 시각은 한국시간 기준 포지션 기록 시점
-            </p>
+            <p className="mt-1 text-xs text-gray-400">최신순 · 한국시간 기준</p>
             {decidedRows.length > 0 ? (
               <HistoryTable rows={decidedRows} />
             ) : (
               <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-                아직 종료된 포지션이 없어요.
+                아직 종료된 포지션 없음
               </p>
             )}
           </div>

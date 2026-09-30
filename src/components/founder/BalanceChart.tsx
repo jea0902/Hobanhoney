@@ -66,7 +66,7 @@ export default function BalanceChart({
   if (snapshots.length < 2) {
     return (
       <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-        그래프 데이터를 모으는 중이에요 (6시간마다 자동 기록)
+        그래프 데이터 모으는 중 (6시간마다 자동 기록)
       </div>
     );
   }

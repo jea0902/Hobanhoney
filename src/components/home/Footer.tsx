@@ -23,9 +23,7 @@ export default function Footer() {
           ))}
         </nav>
         <p className="text-center leading-5 sm:text-left">
-          호반꿀의 모든 정보는 기록과 재미를 위한 것이며 투자 권유가 아닙니다. 표시되는 포지션과
-          승률은 수동 입력·방송 화면 인식 과정에서 실제와 다를 수 있고, 투자 판단과 그 결과에 대한
-          책임은 본인에게 있습니다.
+          투자 권유 아님. 기록은 실제와 다를 수 있고, 투자 책임은 본인에게 있어.
         </p>
         <div className="flex flex-col items-center justify-between gap-1 sm:flex-row">
           <span>Hoban-Honey / 인간지표</span>
