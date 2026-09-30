@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUsdtKrwRate } from "@/lib/bithumb";
@@ -219,15 +220,20 @@ function Avatar({ trader }: { trader: TraderGroup }) {
   );
 }
 
+// 운영자는 실계좌 데이터라 별도 페이지(/founder)가 있고, 나머지는 트레이더별 기록 페이지로 보낸다.
+function traderHref(traderName: string) {
+  return traderName === FOUNDER_NAME ? "/founder" : `/traders/${encodeURIComponent(traderName)}`;
+}
+
 function TraderCell({ trader }: { trader: TraderGroup }) {
   return (
     <td className="whitespace-nowrap px-4 py-3">
-      <div className="flex items-center gap-2">
+      <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
         <Avatar trader={trader} />
-        <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
+        <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
           {trader.traderName}
         </span>
-      </div>
+      </Link>
     </td>
   );
 }
@@ -268,12 +274,12 @@ function TraderCard({
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
           <Avatar trader={trader} />
-          <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
             {trader.traderName}
           </span>
-        </div>
+        </Link>
         <div className="text-right">
           <WinRateDisplay stats={trader.stats} />
         </div>

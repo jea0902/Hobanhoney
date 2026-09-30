@@ -51,6 +51,13 @@ export default async function FounderPage() {
             사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로
             가져오는 정보 (26.03.06부터 추적)
           </p>
+          <p className="mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
+            다른 트레이더를 인간지표라고 부르기 전에, 운영자도 같은 기준으로 공개 검증을 받자는
+            의미로 만든 페이지예요. 방송 화면이 아니라 거래소의 실제 계정 데이터를 읽기 전용으로
+            가져오기 때문에 수익과 손실이 숨김없이 그대로 표시돼요. 누적 승률은 부분청산을 포지션
+            하나로 묶어 실현손익이 플러스면 승으로 세고, 월별 성과의 수익률은 그 달 실현손익을
+            그때까지 넣은 원금(입금 − 출금)으로 나눈 값이에요.
+          </p>
 
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
