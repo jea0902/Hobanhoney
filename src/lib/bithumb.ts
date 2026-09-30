@@ -3,7 +3,8 @@ import { logEvent } from "@/lib/logger";
 export async function getUsdtKrwRate(): Promise<number | null> {
   try {
     const res = await fetch("https://api.bithumb.com/public/ticker/USDT_KRW", {
-      next: { revalidate: 10 },
+      // revalidate를 쓰면 기간이 지난 뒤 첫 요청에 오래된 환율을 돌려줘서 매번 새로 받는다.
+      cache: "no-store",
     });
     const json = await res.json();
     if (json?.status !== "0000") {
