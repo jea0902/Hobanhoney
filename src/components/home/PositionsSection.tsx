@@ -10,7 +10,7 @@ export default function PositionsSection() {
           실시간 포지션
           <span className="text-gray-400">
             <span className="hidden sm:inline">
-              (2026.09.18부터 시간날 때마다 추적 중인 데이터)
+              (2026.09.18부터 자동으로 추적 중인 데이터)
             </span>
             <span className="sm:hidden">(2026.09.18~)</span>
           </span>
