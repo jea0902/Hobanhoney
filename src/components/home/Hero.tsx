@@ -46,12 +46,12 @@ function HumanIndicatorOfMonth({
         <div className="mt-3 flex h-40 w-40 items-center justify-center rounded-full border-4 border-dashed border-yellow-400 text-4xl text-gray-300">
           ?
         </div>
-        <p className="mt-3 text-xs text-gray-400">심사 중 (이번 달 결과 5건 이상부터)</p>
+        <p className="mt-3 text-xs text-gray-400">이번 달 기록 없음</p>
       </div>
     );
   }
 
-  const { traderName, traderImage, wins, losses, reverseWinRate } = humanIndicator;
+  const { traderName, traderImage, returnPercent } = humanIndicator;
 
   return (
     <Link
@@ -81,12 +81,15 @@ function HumanIndicatorOfMonth({
       </div>
       <p className="mt-4 text-2xl font-extrabold text-gray-900 dark:text-gray-100">{traderName}</p>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        반대로 했으면 승률{" "}
-        <span className="text-lg font-extrabold text-red-500">{reverseWinRate.toFixed(0)}%</span>
+        이번 달 수익률{" "}
+        <span
+          className={`text-lg font-extrabold ${returnPercent < 0 ? "text-blue-500" : "text-red-500"}`}
+        >
+          {returnPercent > 0 ? "+" : ""}
+          {returnPercent.toFixed(0)}%
+        </span>
       </p>
-      <p className="text-xs text-gray-400">
-        이번 달 {wins}승 {losses}패
-      </p>
+      <p className="text-xs text-gray-400">종료 수익률 + 미실현 수익률 합계 꼴찌</p>
     </Link>
   );
 }
