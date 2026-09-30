@@ -1,9 +1,15 @@
-export default function Hero() {
+import Link from "next/link";
+import { getMonthlyHumanIndicator } from "@/lib/humanIndicator";
+import type { MonthlyHumanIndicator } from "@/lib/humanIndicator";
+
+export default async function Hero() {
+  const humanIndicator = await getMonthlyHumanIndicator();
+
   return (
     <section className="relative overflow-hidden px-6 py-20">
       <DecorativeOrb />
 
-      <div className="relative mx-auto max-w-6xl">
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-10 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-xl">
           <p className="text-xs font-semibold tracking-[0.2em] text-gray-800 dark:text-gray-300">
             인간지표 추적 사이트
@@ -14,8 +20,77 @@ export default function Hero() {
             실시간 포지션 추적
           </h1>
         </div>
+
+        <HumanIndicatorOfMonth humanIndicator={humanIndicator} />
       </div>
     </section>
+  );
+}
+
+function HumanIndicatorOfMonth({
+  humanIndicator,
+}: {
+  humanIndicator: MonthlyHumanIndicator | null;
+}) {
+  const monthNumber = new Date().toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+  });
+
+  if (!humanIndicator) {
+    return (
+      <div className="flex flex-col items-center text-center sm:mr-8">
+        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+          {monthNumber}의 인간지표
+        </p>
+        <div className="mt-3 flex h-40 w-40 items-center justify-center rounded-full border-4 border-dashed border-yellow-400 text-4xl text-gray-300">
+          ?
+        </div>
+        <p className="mt-3 text-xs text-gray-400">이번 달 기록 없음</p>
+      </div>
+    );
+  }
+
+  const { traderName, traderImage, returnPercent } = humanIndicator;
+
+  return (
+    <Link
+      href={`/traders/${encodeURIComponent(traderName)}`}
+      className="group flex flex-col items-center text-center sm:mr-8"
+    >
+      <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{monthNumber}의 인간지표</p>
+      <div className="relative mt-8">
+        <span
+          aria-hidden="true"
+          className="absolute -top-12 left-1/2 -translate-x-1/2 -rotate-12 text-6xl drop-shadow-md sm:-top-14 sm:text-7xl"
+        >
+          👑
+        </span>
+        {traderImage ? (
+          // eslint-disable-next-line @next/next/no-img-element -- 관리자가 임의 외부 URL을 입력하므로 next/image 도메인 화이트리스트 없이 처리
+          <img
+            src={traderImage}
+            alt={traderName}
+            className="h-40 w-40 rounded-full object-cover shadow-xl ring-4 ring-yellow-400 transition group-hover:scale-105 sm:h-52 sm:w-52"
+          />
+        ) : (
+          <div className="flex h-40 w-40 items-center justify-center rounded-full bg-gray-500 text-5xl font-bold text-white shadow-xl ring-4 ring-yellow-400 sm:h-52 sm:w-52">
+            {traderName.charAt(0)}
+          </div>
+        )}
+      </div>
+      <p className="mt-4 text-2xl font-extrabold text-gray-900 dark:text-gray-100">{traderName}</p>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        이번 달 수익률{" "}
+        <span
+          className={`text-lg font-extrabold ${returnPercent < 0 ? "text-blue-500" : "text-red-500"}`}
+        >
+          {returnPercent > 0 ? "+" : ""}
+          {returnPercent.toFixed(0)}%
+        </span>
+      </p>
+      <p className="text-xs text-gray-400">종료 수익률 + 미실현 수익률 합계 꼴찌</p>
+    </Link>
   );
 }
 
