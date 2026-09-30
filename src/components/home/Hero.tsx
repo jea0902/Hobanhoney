@@ -40,10 +40,10 @@ function HumanIndicatorOfMonth({
   if (!humanIndicator) {
     return (
       <div className="flex flex-col items-center text-center sm:mr-8">
-        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+        <p className="text-2xl font-black tracking-tight text-gray-900 dark:text-gray-100 sm:text-4xl">
           {monthNumber}의 인간지표
         </p>
-        <div className="mt-3 flex h-40 w-40 items-center justify-center rounded-full border-4 border-dashed border-yellow-400 text-4xl text-gray-300">
+        <div className="mt-6 flex h-40 w-40 items-center justify-center rounded-full border-4 border-dashed border-yellow-400 text-4xl text-gray-300">
           ?
         </div>
         <p className="mt-3 text-xs text-gray-400">이번 달 기록 없음</p>
@@ -58,11 +58,13 @@ function HumanIndicatorOfMonth({
       href={`/traders/${encodeURIComponent(traderName)}`}
       className="group flex flex-col items-center text-center sm:mr-8"
     >
-      <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{monthNumber}의 인간지표</p>
-      <div className="relative mt-8">
+      <p className="text-2xl font-black tracking-tight text-gray-900 dark:text-gray-100 sm:text-4xl">
+        {monthNumber}의 인간지표
+      </p>
+      <div className="relative mt-16 sm:mt-20">
         <span
           aria-hidden="true"
-          className="absolute -top-12 left-1/2 -translate-x-1/2 -rotate-12 text-6xl drop-shadow-md sm:-top-14 sm:text-7xl"
+          className="absolute -top-16 left-1/2 -translate-x-1/2 -rotate-12 text-6xl drop-shadow-md sm:-top-20 sm:text-7xl"
         >
           👑
         </span>
