@@ -51,6 +51,9 @@ export default async function FounderPage() {
             사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로
             가져오는 정보 (26.03.06부터 추적)
           </p>
+          <p className="mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
+            승률은 부분청산을 포지션 하나로 묶어서 실현손익이 플러스면 승으로 세.
+          </p>
 
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
@@ -125,7 +128,7 @@ export default async function FounderPage() {
             <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">실시간 포지션</h2>
             {!positions || positions.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-                지금은 열려 있는 포지션이 없어요.
+                지금 열린 포지션 없음
               </p>
             ) : (
               <div className="flex flex-col gap-3">

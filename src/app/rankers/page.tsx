@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -19,6 +20,12 @@ export default function RankersPage() {
           <p className="mb-4 text-sm text-gray-400">
             Hyperliquid에서 활동 중인 PNL 리더보드 TOP 20 안에 드는 고래 트레이더들의 실시간 포지션
             (2026.09.19 기준, 리더보드 PNL순)
+          </p>
+          <p className="mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
+            Hyperliquid는 모든 포지션이 블록체인에 공개돼서 실시간으로 볼 수 있어.{" "}
+            <Link href="/guides/liquidation-price" className="underline">
+              강제청산가 보는 법
+            </Link>
           </p>
           <RankerGrid />
         </div>

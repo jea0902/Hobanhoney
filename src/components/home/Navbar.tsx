@@ -2,11 +2,8 @@ import Link from "next/link";
 import { getOnlineCount } from "@/lib/presence";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default async function Navbar({
-  active = "home",
-}: {
-  active?: "home" | "rankers" | "founder";
-}) {
+// active를 안 넘기면(소개·가이드 같은 글 페이지) 어떤 메뉴도 선택 표시하지 않는다.
+export default async function Navbar({ active }: { active?: "home" | "rankers" | "founder" }) {
   const onlineCount = await getOnlineCount();
 
   return (

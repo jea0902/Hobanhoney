@@ -58,7 +58,7 @@ export default async function RankerGrid() {
   if (rankers.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-        아직 등록된 랭커가 없어요.
+        아직 등록된 랭커 없음
       </div>
     );
   }
