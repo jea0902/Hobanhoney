@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
+import { displaySymbol } from "@/lib/symbol";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
@@ -152,8 +153,17 @@ export default async function PositionGrid() {
     { trader: founderGroup, markPrice: founderTopPosition?.currentPrice ?? null },
   ];
 
+  // 인간지표 컨센서스: 유튜버들(운영자 제외)의 대표 포지션 방향을 1인 1표로 센다.
+  const openDirections = regularTradersWithMarkPrice
+    .map(({ trader }) => trader.openRow?.direction)
+    .filter((direction) => direction !== undefined);
+  const shortCount = openDirections.filter((direction) => direction === "Short").length;
+  const longCount = openDirections.length - shortCount;
+
   return (
     <>
+      {openDirections.length > 0 && <ConsensusBar longCount={longCount} shortCount={shortCount} />}
+
       {/* 모바일: 카드형 */}
       <div className="flex flex-col gap-3 sm:hidden">
         {tradersWithMarkPrice.map(({ trader, markPrice }) => (
@@ -198,6 +208,35 @@ export default async function PositionGrid() {
         </HorizontalScrollArrows>
       </div>
     </>
+  );
+}
+
+function ConsensusBar({ longCount, shortCount }: { longCount: number; shortCount: number }) {
+  const total = longCount + shortCount;
+  const longPercent = Math.round((longCount / total) * 100);
+  const shortPercent = 100 - longPercent;
+  const reverse =
+    longCount === shortCount ? "반반이라 판단 보류" : longCount > shortCount ? "숏?" : "롱?";
+
+  return (
+    <div className="mb-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">인간지표 컨센서스</p>
+        <p className="text-xs text-gray-400">반대로 가면 {reverse}</p>
+      </div>
+      <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+        <div className="bg-red-500" style={{ width: `${longPercent}%` }} />
+        <div className="bg-blue-500" style={{ width: `${shortPercent}%` }} />
+      </div>
+      <div className="mt-2 flex justify-between text-sm font-bold">
+        <span className="text-red-500">
+          롱 {longPercent}% ({longCount}명)
+        </span>
+        <span className="text-blue-500">
+          숏 {shortPercent}% ({shortCount}명)
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -312,7 +351,8 @@ function TraderCard({
           return (
             <div className="mt-3 flex flex-col gap-2">
               <span className="text-sm text-gray-700 dark:text-gray-300">
-                {row.symbol} <span className={`font-bold ${directionColor}`}>{row.direction}</span>
+                {displaySymbol(row.symbol!)}{" "}
+                <span className={`font-bold ${directionColor}`}>{row.direction}</span>
               </span>
               <div className="flex items-baseline justify-between gap-2">
                 <p className={`shrink-0 text-xl font-extrabold ${returnColor}`}>
@@ -403,7 +443,7 @@ function TraderRow({
     <tr className="border-b border-gray-50 last:border-0 dark:border-gray-800">
       <TraderCell trader={trader} />
       <td className="whitespace-nowrap px-4 py-3 text-base text-gray-700 dark:text-gray-300">
-        {row.symbol}
+        {displaySymbol(row.symbol!)}
       </td>
       <td
         className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${directionColor}`}
