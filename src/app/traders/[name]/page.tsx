@@ -5,6 +5,7 @@ import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getSupabase } from "@/lib/supabase";
 import { getTraderStats } from "@/lib/traderGroups";
+import { displaySymbol } from "@/lib/symbol";
 import type { PositionRow, Direction } from "@/types/position";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,9 @@ function directionStats(rows: PositionRow[], direction: Direction) {
 function topSymbols(rows: PositionRow[]) {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    if (row.symbol) counts.set(row.symbol, (counts.get(row.symbol) ?? 0) + 1);
+    if (!row.symbol) continue;
+    const symbol = displaySymbol(row.symbol);
+    counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
   }
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
@@ -230,7 +233,9 @@ function HistoryTable({ rows }: { rows: PositionRow[] }) {
               className="border-b border-gray-50 text-gray-700 last:border-0 dark:border-gray-800/60 dark:text-gray-300"
             >
               <td className="whitespace-nowrap px-4 py-3">{formatKstDate(row.created_at)}</td>
-              <td className="whitespace-nowrap px-4 py-3">{row.symbol ?? "예측 발언"}</td>
+              <td className="whitespace-nowrap px-4 py-3">
+                {row.symbol ? displaySymbol(row.symbol) : "예측 발언"}
+              </td>
               <td
                 className={`whitespace-nowrap px-4 py-3 font-bold ${row.direction === "Long" ? "text-red-500" : "text-blue-500"}`}
               >

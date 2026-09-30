@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
+import { displaySymbol } from "@/lib/symbol";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
@@ -350,7 +351,8 @@ function TraderCard({
           return (
             <div className="mt-3 flex flex-col gap-2">
               <span className="text-sm text-gray-700 dark:text-gray-300">
-                {row.symbol} <span className={`font-bold ${directionColor}`}>{row.direction}</span>
+                {displaySymbol(row.symbol!)}{" "}
+                <span className={`font-bold ${directionColor}`}>{row.direction}</span>
               </span>
               <div className="flex items-baseline justify-between gap-2">
                 <p className={`shrink-0 text-xl font-extrabold ${returnColor}`}>
@@ -441,7 +443,7 @@ function TraderRow({
     <tr className="border-b border-gray-50 last:border-0 dark:border-gray-800">
       <TraderCell trader={trader} />
       <td className="whitespace-nowrap px-4 py-3 text-base text-gray-700 dark:text-gray-300">
-        {row.symbol}
+        {displaySymbol(row.symbol!)}
       </td>
       <td
         className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${directionColor}`}

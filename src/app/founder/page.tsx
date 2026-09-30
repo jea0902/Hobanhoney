@@ -9,6 +9,7 @@ import { getCashFlows } from "@/lib/cashFlows";
 import { getMonthlyPnl, getWinRateStats } from "@/lib/closedTrades";
 import MonthlyPerformance from "@/components/founder/MonthlyPerformance";
 import { getUsdtKrwRate } from "@/lib/bithumb";
+import { displaySymbol } from "@/lib/symbol";
 
 export const dynamic = "force-dynamic";
 
@@ -178,7 +179,7 @@ function PositionCard({ position, krwRate }: { position: OwnerPosition; krwRate:
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <span className="text-base font-semibold text-gray-900 dark:text-gray-100 sm:text-lg">
-        {position.symbol}{" "}
+        {displaySymbol(position.symbol)}{" "}
         <span className={`font-bold ${directionColor}`}>{position.direction}</span>
       </span>
 
