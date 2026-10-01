@@ -53,6 +53,13 @@ function useContainerWidth() {
   return [ref, width] as const;
 }
 
+interface HoveredFlow {
+  x: number;
+  y: number;
+  date: string;
+  flows: StoredCashFlow[];
+}
+
 export default function BalanceChart({
   snapshots,
   cashFlows,
@@ -62,6 +69,7 @@ export default function BalanceChart({
 }) {
   const isDark = useIsDark();
   const [chartWrapperRef, chartWidth] = useContainerWidth();
+  const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null);
 
   if (snapshots.length < 2) {
     return (
@@ -78,8 +86,8 @@ export default function BalanceChart({
   );
 
   // 입출금 시점과 정확히 같은 날 스냅샷이 없을 수도 있으니, 가장 가까운 스냅샷의 인덱스에 표시한다.
-  const depositIndexes = new Set<number>();
-  const withdrawIndexes = new Set<number>();
+  // 같은 스냅샷에 여러 건이 몰리면 점은 하나지만 말풍선에는 전부 보여준다.
+  const flowsByIndex = new Map<number, StoredCashFlow[]>();
   for (const flow of visibleCashFlows) {
     const flowTime = new Date(flow.occurredAt).getTime();
     let closestIndex = 0;
@@ -91,19 +99,45 @@ export default function BalanceChart({
         closestIndex = index;
       }
     });
-    (flow.type === "deposit" ? depositIndexes : withdrawIndexes).add(closestIndex);
+    flowsByIndex.set(closestIndex, [...(flowsByIndex.get(closestIndex) ?? []), flow]);
   }
 
   // ReferenceDot은 카테고리 축과 잘 안 맞는 경우가 있어서, 대신 같은 데이터 배열에
   // "이 지점에 입금/출금이 있었다"는 필드를 심어 그 지점에만 점이 찍히는 Line을 하나 더 그린다.
-  const data = snapshots.map((snapshot, index) => ({
-    date: formatDateLabel(snapshot.recordedAt),
-    equity: snapshot.totalEquity,
-    depositDot: depositIndexes.has(index) ? snapshot.totalEquity : null,
-    withdrawDot: withdrawIndexes.has(index) ? snapshot.totalEquity : null,
-  }));
+  const data = snapshots.map((snapshot, index) => {
+    const flows = flowsByIndex.get(index) ?? [];
+    return {
+      date: formatDateLabel(snapshot.recordedAt),
+      equity: snapshot.totalEquity,
+      depositDot: flows.some((flow) => flow.type === "deposit") ? snapshot.totalEquity : null,
+      withdrawDot: flows.some((flow) => flow.type === "withdraw") ? snapshot.totalEquity : null,
+    };
+  });
 
-  const hasMarkers = depositIndexes.size > 0 || withdrawIndexes.size > 0;
+  const hasMarkers = flowsByIndex.size > 0;
+
+  // 기본 Tooltip은 마우스와 가장 가까운 스냅샷(6시간 간격)에 반응해서 점에서 조금만 비껴도 옆 칸이 잡힌다.
+  // 그래서 점 자체에 마우스 이벤트를 달고, 점보다 넓은 투명 원으로 판정 범위를 키운다.
+  function renderFlowDot(
+    fill: string,
+    { cx, cy, index }: { cx?: number; cy?: number; index?: number },
+  ) {
+    if (cx === undefined || cy === undefined || index === undefined) {
+      return <g key={`empty-${index}`} />;
+    }
+    const flows = flowsByIndex.get(index) ?? [];
+    return (
+      <g
+        key={`flow-${fill}-${index}`}
+        onMouseEnter={() => setHoveredFlow({ x: cx, y: cy, date: data[index].date, flows })}
+        onMouseLeave={() => setHoveredFlow(null)}
+        style={{ cursor: "pointer" }}
+      >
+        <circle cx={cx} cy={cy} r={12} fill="transparent" />
+        <circle cx={cx} cy={cy} r={5} fill={fill} stroke={dotStrokeColor} strokeWidth={2} />
+      </g>
+    );
+  }
 
   // "26.03.06" 라벨 하나가 대략 55px 필요 — 실제 라벨이 배치되는 플롯 영역(전체 너비에서
   // Y축 너비 60px + 좌우 여백을 뺀 부분) 기준으로 안 겹칠 개수만 보여준다.
@@ -123,7 +157,7 @@ export default function BalanceChart({
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-      <div ref={chartWrapperRef} className="h-64">
+      <div ref={chartWrapperRef} className="relative h-64">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
@@ -146,6 +180,8 @@ export default function BalanceChart({
               ]}
             />
             <Tooltip
+              // 입출금 말풍선이 떠 있을 땐 잔액 툴팁과 겹치지 않게 숨긴다.
+              active={hoveredFlow ? false : undefined}
               contentStyle={
                 isDark
                   ? { backgroundColor: "#1F2937", border: "1px solid #374151", color: "#F3F4F6" }
@@ -159,21 +195,40 @@ export default function BalanceChart({
             <Line
               dataKey="depositDot"
               stroke="none"
-              dot={{ r: 5, fill: "#EF4444", stroke: dotStrokeColor, strokeWidth: 2 }}
+              dot={(props) => renderFlowDot("#EF4444", props)}
               activeDot={false}
               isAnimationActive={false}
               legendType="none"
+              tooltipType="none"
             />
             <Line
               dataKey="withdrawDot"
               stroke="none"
-              dot={{ r: 5, fill: "#3B82F6", stroke: dotStrokeColor, strokeWidth: 2 }}
+              dot={(props) => renderFlowDot("#3B82F6", props)}
               activeDot={false}
               isAnimationActive={false}
               legendType="none"
+              tooltipType="none"
             />
           </LineChart>
         </ResponsiveContainer>
+        {hoveredFlow && (
+          <div
+            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-md dark:border-gray-700 dark:bg-gray-800"
+            style={{ left: hoveredFlow.x, top: hoveredFlow.y - 12 }}
+          >
+            <p className="mb-1 text-gray-400">{hoveredFlow.date}</p>
+            {hoveredFlow.flows.map((flow, i) => (
+              <p
+                key={i}
+                className={`font-bold ${flow.type === "deposit" ? "text-red-500" : "text-blue-500"}`}
+              >
+                {flow.type === "deposit" ? "입금 +" : "출금 −"}
+                {flow.amount.toLocaleString("en-US", { maximumFractionDigits: 4 })} {flow.coin}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
       {hasMarkers && (
         <div className="mt-2 flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">

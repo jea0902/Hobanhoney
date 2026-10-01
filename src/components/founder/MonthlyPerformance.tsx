@@ -1,6 +1,7 @@
 import { toKstMonth } from "@/lib/closedTrades";
 import type { MonthlyPnl } from "@/lib/closedTrades";
 import type { StoredCashFlow } from "@/lib/cashFlows";
+import type { BalanceSnapshot } from "@/lib/balanceSnapshots";
 import MonthlyPerformanceView from "@/components/founder/MonthlyPerformanceView";
 import type { MonthRow } from "@/components/founder/MonthlyPerformanceView";
 
@@ -27,9 +28,12 @@ function listMonths(from: string, to: string) {
 export default function MonthlyPerformance({
   monthlyPnl,
   cashFlows,
+  snapshots,
 }: {
   monthlyPnl: MonthlyPnl[];
   cashFlows: StoredCashFlow[];
+  // 시간순(오래된 것 먼저) 정렬이어야 그 달 첫 스냅샷이 월초 자산이 된다.
+  snapshots: BalanceSnapshot[];
 }) {
   const currentMonth = toKstMonth(new Date().toISOString());
   const seedFlows = cashFlows.filter(
@@ -45,10 +49,14 @@ export default function MonthlyPerformance({
         loss: 0,
         total: 0,
       };
-      // 전체 시드 = 그 달 말까지 넣은 돈 − 뺀 돈 (누적 순입금)
-      const seed = seedFlows
-        .filter((flow) => toKstMonth(flow.occurredAt) <= month)
-        .reduce((sum, flow) => sum + (flow.type === "deposit" ? flow.amount : -flow.amount), 0);
+      // 시드 = 월초 자산 + 그 달 입금. 출금은 빼지 않는다 — 월말에 수익을 빼면 시드가 쪼그라들어
+      // 수익률이 부풀었다(9월: 1,760 출금 후 80% → 421%). 월초 자산은 그 달 첫 잔액 스냅샷.
+      const monthStartEquity =
+        snapshots.find((snapshot) => toKstMonth(snapshot.recordedAt) === month)?.totalEquity ?? 0;
+      const monthDeposits = seedFlows
+        .filter((flow) => flow.type === "deposit" && toKstMonth(flow.occurredAt) === month)
+        .reduce((sum, flow) => sum + flow.amount, 0);
+      const seed = monthStartEquity + monthDeposits;
       return { ...pnl, seed, returnPercent: seed > 0 ? (pnl.total / seed) * 100 : null };
     });
 
