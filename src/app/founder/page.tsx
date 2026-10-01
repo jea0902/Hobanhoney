@@ -119,10 +119,14 @@ export default async function FounderPage() {
             <div>
               <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">월별 성과</h2>
               <p className="mt-1 text-xs text-gray-400">
-                실현손익 기준 · 시드 = 그 달 말까지 입금 − 출금 누적 (USDT)
+                실현손익 기준 · 시드 = 월초 자산 + 그 달 입금 (USDT)
               </p>
             </div>
-            <MonthlyPerformance monthlyPnl={monthlyPnl} cashFlows={cashFlows} />
+            <MonthlyPerformance
+              monthlyPnl={monthlyPnl}
+              cashFlows={cashFlows}
+              snapshots={snapshots}
+            />
           </div>
 
           <div className="mb-6 flex flex-col gap-3">
