@@ -5,6 +5,7 @@ import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getSupabase } from "@/lib/supabase";
 import { getTraderStats } from "@/lib/traderGroups";
+import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
 import type { PositionRow, Direction } from "@/types/position";
 
@@ -37,10 +38,11 @@ function formatKstDate(iso: string) {
 function directionStats(rows: PositionRow[], direction: Direction) {
   const decided = rows.filter((row) => row.direction === direction && row.result);
   const wins = decided.filter((row) => row.result === "win").length;
+  const losses = decided.filter((row) => row.result === "loss").length;
   return {
     count: rows.filter((row) => row.direction === direction).length,
     decided: decided.length,
-    winRate: decided.length > 0 ? (wins / decided.length) * 100 : null,
+    winRate: getWinRate(wins, losses),
   };
 }
 
@@ -119,7 +121,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 <>
                   {" "}
                   {stats.wins}승 {stats.draws}무 {stats.losses}패, 승률{" "}
-                  <strong>{stats.winRate!.toFixed(0)}%</strong>.
+                  <strong>{stats.winRate === null ? "—" : `${stats.winRate.toFixed(0)}%`}</strong>.
                 </>
               ) : (
                 " 아직 결과 나온 포지션 없음."

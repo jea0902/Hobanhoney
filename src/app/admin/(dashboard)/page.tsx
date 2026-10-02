@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
 import { deletePosition } from "../actions";
+import { getWinRate } from "@/lib/positionMath";
 import type { PositionRow } from "@/types/position";
 
 export const dynamic = "force-dynamic";
@@ -32,8 +33,9 @@ export default async function AdminPage() {
   const openPositions = positions.filter((position) => !position.result);
   const closedPositions = positions.filter((position) => position.result);
   const wins = closedPositions.filter((position) => position.result === "win").length;
-  const winRate =
-    closedPositions.length > 0 ? Math.round((wins / closedPositions.length) * 100) : null;
+  const losses = closedPositions.filter((position) => position.result === "loss").length;
+  const winRatePercent = getWinRate(wins, losses);
+  const winRate = winRatePercent === null ? null : Math.round(winRatePercent);
 
   const closedByTrader = new Map<string, PositionRow[]>();
   for (const position of closedPositions) {

@@ -1,5 +1,35 @@
 import { getSupabase } from "@/lib/supabase";
 import type { ClosedTradeRecord } from "@/lib/bybitPrivate";
+import { getBalanceSnapshots } from "@/lib/balanceSnapshots";
+import type { BalanceSnapshot } from "@/lib/balanceSnapshots";
+import { getCashFlows } from "@/lib/cashFlows";
+import type { StoredCashFlow } from "@/lib/cashFlows";
+import { getWinRate } from "@/lib/positionMath";
+
+// 계정 입출금 기록엔 추적 이전(2024~2025) 내역도 섞여 있어서, 추적 시작일(26.03.06 KST) 이후만 시드로 센다.
+const TRACKING_START = new Date("2026-03-06T00:00:00+09:00").getTime();
+
+// 시드 = 월초 자산 + 그 달 입금. 출금은 빼지 않는다 — 월말에 수익을 빼면 시드가 쪼그라들어
+// 수익률이 부풀었다(9월: 1,760 출금 후 80% → 421%). 월초 자산은 그 달 첫 잔액 스냅샷.
+// snapshots는 시간순(오래된 것 먼저) 정렬이어야 그 달 첫 스냅샷이 월초 자산이 된다.
+export function getMonthSeed(
+  month: string,
+  snapshots: BalanceSnapshot[],
+  cashFlows: StoredCashFlow[],
+) {
+  const monthStartEquity =
+    snapshots.find((snapshot) => toKstMonth(snapshot.recordedAt) === month)?.totalEquity ?? 0;
+  const monthDeposits = cashFlows
+    .filter(
+      (flow) =>
+        flow.coin === "USDT" &&
+        flow.type === "deposit" &&
+        new Date(flow.occurredAt).getTime() >= TRACKING_START &&
+        toKstMonth(flow.occurredAt) === month,
+    )
+    .reduce((sum, flow) => sum + flow.amount, 0);
+  return monthStartEquity + monthDeposits;
+}
 
 export async function upsertClosedTrades(records: ClosedTradeRecord[]) {
   if (records.length === 0) return;
@@ -19,6 +49,8 @@ export async function upsertClosedTrades(records: ClosedTradeRecord[]) {
 
 interface DirectionStats {
   wins: number;
+  draws: number;
+  losses: number;
   total: number;
   winRate: number | null;
 }
@@ -63,23 +95,50 @@ function groupIntoTrades(rows: ClosedTradeRow[]): GroupedTrade[] {
   return Array.from(groups.values());
 }
 
-function toStats(trades: GroupedTrade[]): DirectionStats {
-  const total = trades.length;
-  const wins = trades.filter((trade) => trade.pnl > 0).length;
-  return { wins, total, winRate: total > 0 ? (wins / total) * 100 : null };
+type TradeResult = "win" | "draw" | "loss";
+
+// 포지션 손익이 그 달(마지막 청산 시각 기준) 시드의 -3% 이상 +3% 이하면 무승부.
+function getTradeResult(trade: GroupedTrade, seed: number): TradeResult {
+  // 시드를 못 구한 달은 비율을 낼 수 없어서 손익 부호로만 가른다.
+  if (seed <= 0) return trade.pnl > 0 ? "win" : "loss";
+  const seedReturnPercent = (trade.pnl / seed) * 100;
+  if (seedReturnPercent > 3) return "win";
+  if (seedReturnPercent < -3) return "loss";
+  return "draw";
+}
+
+function toStats(results: TradeResult[]): DirectionStats {
+  const wins = results.filter((result) => result === "win").length;
+  const draws = results.filter((result) => result === "draw").length;
+  const losses = results.filter((result) => result === "loss").length;
+  return { wins, draws, losses, total: results.length, winRate: getWinRate(wins, losses) };
 }
 
 export async function getWinRateStats(): Promise<WinRateStats> {
   const supabase = getSupabase();
-  const { data } = await supabase
-    .from("closed_trades")
-    .select("closed_pnl, direction, symbol, avg_entry_price, closed_at");
-  const trades = groupIntoTrades((data ?? []) as ClosedTradeRow[]);
+  const [{ data }, snapshots, cashFlows] = await Promise.all([
+    supabase
+      .from("closed_trades")
+      .select("closed_pnl, direction, symbol, avg_entry_price, closed_at"),
+    getBalanceSnapshots(),
+    getCashFlows(),
+  ]);
+  const trades = groupIntoTrades((data ?? []) as ClosedTradeRow[]).map((trade) => ({
+    direction: trade.direction,
+    result: getTradeResult(
+      trade,
+      getMonthSeed(toKstMonth(trade.lastClosedAt), snapshots, cashFlows),
+    ),
+  }));
+  const resultsOf = (direction?: "Long" | "Short") =>
+    trades
+      .filter((trade) => direction === undefined || trade.direction === direction)
+      .map((trade) => trade.result);
 
   return {
-    ...toStats(trades),
-    long: toStats(trades.filter((trade) => trade.direction === "Long")),
-    short: toStats(trades.filter((trade) => trade.direction === "Short")),
+    ...toStats(resultsOf()),
+    long: toStats(resultsOf("Long")),
+    short: toStats(resultsOf("Short")),
   };
 }
 

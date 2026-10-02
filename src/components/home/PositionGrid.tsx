@@ -141,8 +141,8 @@ export default async function PositionGrid() {
     openRow: founderTopPosition ? founderRowFromPosition(founderTopPosition) : null,
     stats: {
       wins: ownerWinRate.wins,
-      draws: 0,
-      losses: ownerWinRate.total - ownerWinRate.wins,
+      draws: ownerWinRate.draws,
+      losses: ownerWinRate.losses,
       total: ownerWinRate.total,
       winRate: ownerWinRate.winRate,
     },
@@ -280,10 +280,18 @@ function TraderCell({ trader }: { trader: TraderGroup }) {
 function WinRateDisplay({ stats }: { stats: TraderStats }) {
   if (stats.total === 0)
     return <span className="text-base text-gray-300 dark:text-gray-600">—</span>;
-  const color = stats.winRate! >= 50 ? "text-red-500" : "text-blue-500";
+  // 결과가 전부 무승부면 승률을 낼 수 없다 (무승부는 승률 계산에서 뺌).
+  const color =
+    stats.winRate === null
+      ? "text-gray-400"
+      : stats.winRate >= 50
+        ? "text-red-500"
+        : "text-blue-500";
   return (
     <>
-      <p className={`text-base font-bold ${color}`}>{stats.winRate!.toFixed(0)}%</p>
+      <p className={`text-base font-bold ${color}`}>
+        {stats.winRate === null ? "—" : `${stats.winRate.toFixed(0)}%`}
+      </p>
       <p className="text-xs font-normal text-gray-400 dark:text-gray-500">
         {stats.wins}승 {stats.draws}무 {stats.losses}패
       </p>

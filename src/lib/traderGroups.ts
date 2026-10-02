@@ -1,4 +1,5 @@
 import type { PositionRow } from "@/types/position";
+import { getWinRate } from "@/lib/positionMath";
 
 export interface TraderStats {
   wins: number;
@@ -22,7 +23,7 @@ export function getTraderStats(rows: PositionRow[], traderName: string): TraderS
   const draws = decided.filter((row) => row.result === "draw").length;
   const losses = decided.filter((row) => row.result === "loss").length;
   const total = decided.length;
-  return { wins, draws, losses, total, winRate: total > 0 ? (wins / total) * 100 : null };
+  return { wins, draws, losses, total, winRate: getWinRate(wins, losses) };
 }
 
 // positions는 최신순(created_at desc) 정렬이어야 각 트레이더의 rows[0]가 최근 활동이 된다.
