@@ -1,35 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import type { ClosedTradeRecord } from "@/lib/bybitPrivate";
-import { getBalanceSnapshots } from "@/lib/balanceSnapshots";
-import type { BalanceSnapshot } from "@/lib/balanceSnapshots";
-import { getCashFlows } from "@/lib/cashFlows";
-import type { StoredCashFlow } from "@/lib/cashFlows";
 import { getWinRate } from "@/lib/positionMath";
-
-// 계정 입출금 기록엔 추적 이전(2024~2025) 내역도 섞여 있어서, 추적 시작일(26.03.06 KST) 이후만 시드로 센다.
-const TRACKING_START = new Date("2026-03-06T00:00:00+09:00").getTime();
-
-// 시드 = 월초 자산 + 그 달 입금. 출금은 빼지 않는다 — 월말에 수익을 빼면 시드가 쪼그라들어
-// 수익률이 부풀었다(9월: 1,760 출금 후 80% → 421%). 월초 자산은 그 달 첫 잔액 스냅샷.
-// snapshots는 시간순(오래된 것 먼저) 정렬이어야 그 달 첫 스냅샷이 월초 자산이 된다.
-export function getMonthSeed(
-  month: string,
-  snapshots: BalanceSnapshot[],
-  cashFlows: StoredCashFlow[],
-) {
-  const monthStartEquity =
-    snapshots.find((snapshot) => toKstMonth(snapshot.recordedAt) === month)?.totalEquity ?? 0;
-  const monthDeposits = cashFlows
-    .filter(
-      (flow) =>
-        flow.coin === "USDT" &&
-        flow.type === "deposit" &&
-        new Date(flow.occurredAt).getTime() >= TRACKING_START &&
-        toKstMonth(flow.occurredAt) === month,
-    )
-    .reduce((sum, flow) => sum + flow.amount, 0);
-  return monthStartEquity + monthDeposits;
-}
 
 export async function upsertClosedTrades(records: ClosedTradeRecord[]) {
   if (records.length === 0) return;
@@ -41,6 +12,8 @@ export async function upsertClosedTrades(records: ClosedTradeRecord[]) {
       closed_pnl: record.closedPnl,
       direction: record.direction,
       avg_entry_price: record.avgEntryPrice,
+      entry_value: record.entryValue,
+      leverage: record.leverage,
       closed_at: record.closedAt,
     })),
     { onConflict: "order_id" },
@@ -65,13 +38,21 @@ interface ClosedTradeRow {
   direction: "Long" | "Short" | null;
   symbol: string;
   avg_entry_price: number | null;
+  entry_value: number | null;
+  leverage: number | null;
   closed_at: string;
 }
 
 interface GroupedTrade {
   pnl: number;
+  // 그 포지션에 들어간 증거금 = 진입 금액 ÷ 레버리지. 부분청산 조각들의 증거금을 합친 값.
+  margin: number;
   direction: "Long" | "Short" | null;
   lastClosedAt: string;
+}
+
+function marginOf(row: ClosedTradeRow) {
+  return row.entry_value && row.leverage ? Number(row.entry_value) / Number(row.leverage) : 0;
 }
 
 // 포지션 하나가 여러 번 부분청산되면 orderId가 다른 별도 행으로 쌓이는데, 같은 진입가(avgEntryPrice)를
@@ -83,10 +64,12 @@ function groupIntoTrades(rows: ClosedTradeRow[]): GroupedTrade[] {
     const existing = groups.get(key);
     if (existing) {
       existing.pnl += Number(row.closed_pnl);
+      existing.margin += marginOf(row);
       if (row.closed_at > existing.lastClosedAt) existing.lastClosedAt = row.closed_at;
     } else {
       groups.set(key, {
         pnl: Number(row.closed_pnl),
+        margin: marginOf(row),
         direction: row.direction,
         lastClosedAt: row.closed_at,
       });
@@ -97,13 +80,13 @@ function groupIntoTrades(rows: ClosedTradeRow[]): GroupedTrade[] {
 
 type TradeResult = "win" | "draw" | "loss";
 
-// 포지션 손익이 그 달(마지막 청산 시각 기준) 시드의 -3% 이상 +3% 이하면 무승부.
-function getTradeResult(trade: GroupedTrade, seed: number): TradeResult {
-  // 시드를 못 구한 달은 비율을 낼 수 없어서 손익 부호로만 가른다.
-  if (seed <= 0) return trade.pnl > 0 ? "win" : "loss";
-  const seedReturnPercent = (trade.pnl / seed) * 100;
-  if (seedReturnPercent > 3) return "win";
-  if (seedReturnPercent < -3) return "loss";
+// 포지션 손익 ÷ 그 포지션 증거금이 -3% 이상 +3% 이하면 무승부.
+function getTradeResult(trade: GroupedTrade): TradeResult {
+  // 증거금 정보가 없는 행(진입 금액·레버리지 저장 전 기록)은 비율을 낼 수 없어서 손익 부호로만 가른다.
+  if (trade.margin <= 0) return trade.pnl > 0 ? "win" : "loss";
+  const returnPercent = (trade.pnl / trade.margin) * 100;
+  if (returnPercent > 3) return "win";
+  if (returnPercent < -3) return "loss";
   return "draw";
 }
 
@@ -116,19 +99,12 @@ function toStats(results: TradeResult[]): DirectionStats {
 
 export async function getWinRateStats(): Promise<WinRateStats> {
   const supabase = getSupabase();
-  const [{ data }, snapshots, cashFlows] = await Promise.all([
-    supabase
-      .from("closed_trades")
-      .select("closed_pnl, direction, symbol, avg_entry_price, closed_at"),
-    getBalanceSnapshots(),
-    getCashFlows(),
-  ]);
+  const { data } = await supabase
+    .from("closed_trades")
+    .select("closed_pnl, direction, symbol, avg_entry_price, entry_value, leverage, closed_at");
   const trades = groupIntoTrades((data ?? []) as ClosedTradeRow[]).map((trade) => ({
     direction: trade.direction,
-    result: getTradeResult(
-      trade,
-      getMonthSeed(toKstMonth(trade.lastClosedAt), snapshots, cashFlows),
-    ),
+    result: getTradeResult(trade),
   }));
   const resultsOf = (direction?: "Long" | "Short") =>
     trades

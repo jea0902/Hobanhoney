@@ -1,4 +1,4 @@
-import { getMonthSeed, toKstMonth } from "@/lib/closedTrades";
+import { toKstMonth } from "@/lib/closedTrades";
 import type { MonthlyPnl } from "@/lib/closedTrades";
 import type { StoredCashFlow } from "@/lib/cashFlows";
 import type { BalanceSnapshot } from "@/lib/balanceSnapshots";
@@ -6,6 +6,8 @@ import MonthlyPerformanceView from "@/components/founder/MonthlyPerformanceView"
 import type { MonthRow } from "@/components/founder/MonthlyPerformanceView";
 
 const FIRST_MONTH = "2026-04";
+// 계정 입출금 기록엔 추적 이전(2024~2025) 내역도 섞여 있어서, 추적 시작일(26.03.06 KST) 이후만 시드로 센다.
+const TRACKING_START = new Date("2026-03-06T00:00:00+09:00").getTime();
 
 function listMonths(from: string, to: string) {
   const months: string[] = [];
@@ -34,6 +36,9 @@ export default function MonthlyPerformance({
   snapshots: BalanceSnapshot[];
 }) {
   const currentMonth = toKstMonth(new Date().toISOString());
+  const seedFlows = cashFlows.filter(
+    (flow) => flow.coin === "USDT" && new Date(flow.occurredAt).getTime() >= TRACKING_START,
+  );
 
   const rows: MonthRow[] = listMonths(FIRST_MONTH, currentMonth)
     .reverse()
@@ -44,7 +49,14 @@ export default function MonthlyPerformance({
         loss: 0,
         total: 0,
       };
-      const seed = getMonthSeed(month, snapshots, cashFlows);
+      // 시드 = 월초 자산 + 그 달 입금. 출금은 빼지 않는다 — 월말에 수익을 빼면 시드가 쪼그라들어
+      // 수익률이 부풀었다(9월: 1,760 출금 후 80% → 421%). 월초 자산은 그 달 첫 잔액 스냅샷.
+      const monthStartEquity =
+        snapshots.find((snapshot) => toKstMonth(snapshot.recordedAt) === month)?.totalEquity ?? 0;
+      const monthDeposits = seedFlows
+        .filter((flow) => flow.type === "deposit" && toKstMonth(flow.occurredAt) === month)
+        .reduce((sum, flow) => sum + flow.amount, 0);
+      const seed = monthStartEquity + monthDeposits;
       return { ...pnl, seed, returnPercent: seed > 0 ? (pnl.total / seed) * 100 : null };
     });
 

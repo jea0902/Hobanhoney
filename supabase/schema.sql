@@ -107,3 +107,7 @@ alter table closed_trades add column if not exists direction text check (directi
 
 -- 같은 포지션의 부분청산들을 묶어 승/패를 계산하기 위한 그룹핑 키 (symbol + avg_entry_price)
 alter table closed_trades add column if not exists avg_entry_price numeric;
+
+-- 승/무/패 판정용: 포지션 손익 ÷ 증거금(진입 금액 ÷ 레버리지)이 -3%~+3%면 무승부
+alter table closed_trades add column if not exists entry_value numeric; -- Bybit cumEntryValue (USDT)
+alter table closed_trades add column if not exists leverage numeric;

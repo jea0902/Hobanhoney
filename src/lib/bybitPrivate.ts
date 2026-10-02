@@ -226,6 +226,9 @@ export interface ClosedTradeRecord {
   closedPnl: number;
   direction: Direction;
   avgEntryPrice: number;
+  // 진입 금액(USDT)과 레버리지. 둘을 나누면 그 포지션에 들어간 증거금이 된다 (승/무/패 판정용).
+  entryValue: number;
+  leverage: number;
   closedAt: string;
 }
 
@@ -237,6 +240,8 @@ interface RawClosedPnl {
   // 실제 데이터로 검증: side=Sell, 청산가>진입가인데 손익이 플러스였음 → 그 경우는 롱이어야 맞는 계산.
   side: "Buy" | "Sell";
   avgEntryPrice: string;
+  cumEntryValue: string;
+  leverage: string;
   updatedTime: string;
 }
 
@@ -269,6 +274,8 @@ export async function getClosedPnl(
       closedPnl: Number(row.closedPnl),
       direction: row.side === "Buy" ? ("Short" as Direction) : ("Long" as Direction),
       avgEntryPrice: Number(row.avgEntryPrice),
+      entryValue: Number(row.cumEntryValue),
+      leverage: Number(row.leverage),
       closedAt: new Date(Number(row.updatedTime)).toISOString(),
     }));
   } catch (error) {
