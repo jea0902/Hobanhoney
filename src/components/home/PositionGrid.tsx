@@ -4,7 +4,7 @@ import { displaySymbol } from "@/lib/symbol";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
-import { getTraderGroups } from "@/lib/traderGroups";
+import { getTraderGroups, UNTRACKED_TRADERS } from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import { getOwnerPositions } from "@/lib/bybitPrivate";
@@ -110,7 +110,9 @@ export default async function PositionGrid() {
         traders.map(async (trader) => {
           // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 규모(수량 × 현재가)가 가장 큰 1개만 보여준다.
           const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
-          if (openActualRows.length === 0) return { trader, markPrice: null };
+          if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
+            return { trader, markPrice: null };
+          }
 
           const candidates = await Promise.all(
             openActualRows.map(async (row) => ({
@@ -332,7 +334,11 @@ function TraderCard({
         </div>
       </div>
 
-      {!row && <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">포지션 없음</p>}
+      {!row && (
+        <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
+          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
+        </p>
+      )}
 
       {row?.type === "statement" && (
         <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
@@ -416,7 +422,7 @@ function TraderRow({
       <tr className="border-b border-gray-50 last:border-0 dark:border-gray-800">
         <TraderCell trader={trader} />
         <td colSpan={7} className="px-4 py-3 text-base text-gray-400 dark:text-gray-500">
-          포지션 없음
+          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
         </td>
         <WinRateCell stats={trader.stats} />
         {elapsedCell}

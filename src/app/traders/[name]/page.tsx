@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getSupabase } from "@/lib/supabase";
-import { getTraderStats } from "@/lib/traderGroups";
+import { getTraderStats, UNTRACKED_TRADERS } from "@/lib/traderGroups";
 import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
 import type { PositionRow, Direction } from "@/types/position";
@@ -79,7 +79,9 @@ export default async function TraderPage({ params }: { params: { name: string } 
   const long = directionStats(rows, "Long");
   const short = directionStats(rows, "Short");
   const symbols = topSymbols(rows);
-  const openRows = rows.filter((row) => !row.result);
+  const untrackedReason = UNTRACKED_TRADERS[name];
+  // 추적 중단된 트레이더의 열린 포지션은 마지막 수동 기록일 뿐이라 "진행 중"으로 보여주지 않는다.
+  const openRows = untrackedReason ? [] : rows.filter((row) => !row.result);
   const decidedRows = rows.filter((row) => row.result);
   const pnlValues = decidedRows
     .filter((row) => row.result_pnl_percent !== null)
@@ -108,7 +110,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 {name} 포지션 기록
               </h1>
               <p className="mt-1 text-sm text-gray-400">
-                {formatKstDate(firstRecordedAt)}부터 추적 중
+                {untrackedReason ?? `${formatKstDate(firstRecordedAt)}부터 추적 중`}
               </p>
             </div>
           </div>
