@@ -17,6 +17,13 @@ export interface TraderGroup {
   stats: TraderStats;
 }
 
+// 자동 추적이 안 되는 트레이더. 남아 있는 "열린 포지션"은 마지막 수동 기록일 뿐 지금 상태가 아니라서,
+// 실시간 포지션·컨센서스·이달의 인간지표에선 빼고 종료된 기록과 승률만 보여준다.
+// 사또: 방송마다 커스텀 썸네일을 걸어서 라이브 썸네일에 실제 화면이 안 나옴 (2026-10-06, 에이전트 config.ts 참고)
+export const UNTRACKED_TRADERS: Record<string, string> = {
+  사또: "방송 화면을 볼 수 없어 자동 추적 중단",
+};
+
 export function getTraderStats(rows: PositionRow[], traderName: string): TraderStats {
   const decided = rows.filter((row) => row.trader_name === traderName && row.result);
   const wins = decided.filter((row) => row.result === "win").length;
@@ -35,7 +42,7 @@ export function getTraderGroups(positions: PositionRow[]): TraderGroup[] {
       traderName,
       traderImage: rows[0]?.trader_image ?? null,
       rows,
-      openRow: rows.find((row) => !row.result) ?? null,
+      openRow: UNTRACKED_TRADERS[traderName] ? null : (rows.find((row) => !row.result) ?? null),
       stats: getTraderStats(positions, traderName),
     };
   });

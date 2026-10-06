@@ -8,6 +8,7 @@ import {
   LIVE_CHECK_INTERVAL_MS,
   POLL_INTERVAL_MS,
   TRADERS,
+  UNCHANGED_THUMBNAIL_ALERT_MS,
 } from "./config.ts";
 import { closePosition, getOpenRows, logAgent, openPosition, updatePosition } from "./db.ts";
 import { readScreen } from "./gemma.ts";
@@ -23,6 +24,9 @@ interface TraderState {
   liveVideoId: string | null;
   liveCheckedAt: number;
   lastImageHash: string | null;
+  lastImageChangedAt: number;
+  // "썸네일이 안 바뀜" 경고를 이미 남긴 영상. 같은 영상에서 반복해서 남기지 않으려고 기억한다.
+  unchangedAlertVideoId: string | null;
   failedReadings: number;
   // 직전 화면. 이번 화면과 같아야(2회 연속 일치) 확정해서 반영한다.
   previousReading: ScreenReading | null;
@@ -69,8 +73,30 @@ async function tick(trader: Trader, state: TraderState) {
   const image = await fetchLiveThumbnail(videoId);
   if (!image) return;
   const hash = createHash("md5").update(image).digest("hex");
-  if (hash === state.lastImageHash) return;
+  if (hash === state.lastImageHash) {
+    // 실제 트레이딩 화면은 차트·가격·시계가 움직여서 썸네일이 5분마다 바뀐다. 방송 중인데 오래 그대로면
+    // 커스텀 썸네일(사또 사례)이거나 정지 화면이라 포지션을 볼 수 없다. 이 경우는 Gemma를 안 불러서
+    // 아무 로그도 안 남으니, 영상마다 한 번 관리자 로그에 알린다.
+    if (
+      Date.now() - state.lastImageChangedAt >= UNCHANGED_THUMBNAIL_ALERT_MS &&
+      state.unchangedAlertVideoId !== videoId
+    ) {
+      state.unchangedAlertVideoId = videoId;
+      const minutes = Math.round(UNCHANGED_THUMBNAIL_ALERT_MS / 60_000);
+      log(traderName, `방송 중인데 썸네일이 ${minutes}분 넘게 그대로 (영상 ${videoId})`);
+      if (!DRY_RUN) {
+        await logAgent(
+          "error",
+          `[${traderName}] 방송 중인데 라이브 썸네일이 ${minutes}분 넘게 안 바뀜 — ` +
+            "커스텀 썸네일이면 실제 화면을 볼 수 없어 자동 추적 불가",
+          { videoId },
+        );
+      }
+    }
+    return;
+  }
   state.lastImageHash = hash;
+  state.lastImageChangedAt = Date.now();
 
   let reading = await readScreen(image, screenHint);
   // 방송 화면 배치가 바뀌면 화면 설명이 오히려 틀린 안내가 되므로, 설명 없이 한 번 더 읽어 본다.
@@ -178,6 +204,8 @@ async function runTrader(trader: Trader) {
     liveVideoId: null,
     liveCheckedAt: 0,
     lastImageHash: null,
+    lastImageChangedAt: Date.now(),
+    unchangedAlertVideoId: null,
     failedReadings: 0,
     previousReading: null,
     lastConfirmedAt: new Map(),

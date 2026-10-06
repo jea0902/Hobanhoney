@@ -2,6 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { toKstMonth } from "@/lib/closedTrades";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
+import { UNTRACKED_TRADERS } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 
 export interface MonthlyHumanIndicator {
@@ -18,7 +19,8 @@ export async function getMonthlyHumanIndicator(): Promise<MonthlyHumanIndicator 
   const month = toKstMonth(new Date().toISOString());
   const supabase = getSupabase();
   const { data } = await supabase.from("positions").select("*");
-  const rows = (data ?? []) as PositionRow[];
+  // 자동 추적이 안 되는 트레이더는 이번 달 기록이 실제와 달라서 후보에서 뺀다.
+  const rows = ((data ?? []) as PositionRow[]).filter((row) => !UNTRACKED_TRADERS[row.trader_name]);
 
   const closedThisMonth = rows.filter(
     (row) => row.result && toKstMonth(row.result_recorded_at ?? row.created_at) === month,

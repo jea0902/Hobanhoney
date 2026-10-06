@@ -11,8 +11,10 @@ async function callApi(path: string) {
 
 export async function getLiveVideoId(channelId: string): Promise<string | null> {
   // 채널의 "업로드" 재생목록 ID는 채널 ID 앞의 "UC"를 "UU"로 바꾼 것이다.
+  // 방송 중에 클립을 여러 개 올리면 라이브가 최근 5개 밖으로 밀려나서 50개(최대치)까지 본다.
+  // playlistItems·videos 둘 다 몇 개를 받든 1유닛이라 할당량은 그대로다.
   const playlist = await callApi(
-    `playlistItems?part=contentDetails&maxResults=5&playlistId=UU${channelId.slice(2)}`,
+    `playlistItems?part=contentDetails&maxResults=50&playlistId=UU${channelId.slice(2)}`,
   );
   const videoIds: string[] = playlist.items.map(
     (item: { contentDetails: { videoId: string } }) => item.contentDetails.videoId,
