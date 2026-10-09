@@ -58,15 +58,7 @@ export default async function FounderPage() {
 
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">
-          <h1 className="mb-1 text-lg font-bold text-gray-900 dark:text-gray-100">운영자 포지션</h1>
-          <p className="mb-4 text-sm text-gray-400">
-            사이트 만든 사람이 직접 실전 트레이딩하는 Bybit 거래소 계정 API를 통해 실시간으로
-            가져오는 정보 (2026.03.06부터 추적)
-          </p>
-          <p className="mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
-            승률은 부분청산을 포지션 하나로 묶어서, 실현손익이 그 포지션 증거금의 +3% 넘으면 승, -3%
-            미만이면 패, 그 사이는 무승부로 세. 무승부는 승률 계산에서 빼.
-          </p>
+          <h1 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">운영자 포지션</h1>
 
           {positionsWithoutStopLoss.length > 0 && (
             // 원칙 3번 위반을 놓치지 않게 맨 위에서 깜빡인다 (동작 줄이기 설정이면 깜빡임 없음).
