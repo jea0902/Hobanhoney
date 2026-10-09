@@ -13,10 +13,16 @@ export const TRADERS = [
       "There is NO mark price on this screen, so mark_price must be null.",
   },
   { traderName: "짭구", channelId: "UCAd9A4YzTb-g2BLnaZxhECA", screenHint: null }, // @zzap9
+  // 웨돔: 거래소 기본 포지션 패널(칸 이름 있음)이 라이브 썸네일에 그대로 보여서 화면 설명 없이 읽힌다 (2026-10-09 확인)
+  { traderName: "웨돔", channelId: "UC9stxmmO1eaSTh9F9WETURg", screenHint: null }, // 웨돔의 비트코인
+  // 용느: 추가 시점(2026-10-09)에 방송 중이 아니라 화면을 확인 못 함. 커스텀 썸네일이면
+  // UNCHANGED_THUMBNAIL_ALERT_MS 알림이 오니, 그때 사또처럼 제외할 것.
+  { traderName: "용느", channelId: "UCbHN1sTuPySKpnqKSp0JHRQ", screenHint: null }, // @stockking_YN
   // 사또(@live-streamersatto, UCnXe6v0-5vmMMRU2qx0XwUw)는 방송마다 커스텀 썸네일을 걸어서 라이브 썸네일에
   // 실제 화면이 안 나온다 → 자동 추적 불가로 제외 (2026-10-06). 사이트에선 src/lib/traderGroups.ts의
   // UNTRACKED_TRADERS로 "추적 중단" 표시. 새 트레이더도 같은 경우면 UNCHANGED_THUMBNAIL_ALERT_MS 알림으로 드러난다.
   // (라이브 썸네일과 영상 대표 이미지를 비교하는 방법은 안 됨 — 커스텀 썸네일이 없는 라이브도 둘이 똑같다.)
+  // 자두두(Jadoodoo, UCIOHzEDwgUuLBZwPKEUt1AQ)도 같은 이유로 제외 (2026-10-09 라이브 썸네일 확인).
 ];
 
 // 방송 중인데 라이브 썸네일이 이만큼 안 바뀌면 실제 화면이 아니라고 보고(커스텀 썸네일·정지 화면)
