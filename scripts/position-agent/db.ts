@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { PositionRow } from "../../src/types/position.ts";
 import { getResult, getReturnRatePercent, getUnrealizedPnl } from "../../src/lib/positionMath.ts";
 import type { ScreenPosition } from "./gemma.ts";
+import { TRADERS } from "./config.ts";
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -21,7 +22,11 @@ export async function getOpenRows(traderName: string): Promise<PositionRow[]> {
   return data as PositionRow[];
 }
 
+// config.ts에 적힌 사진이 있으면 그걸 쓰고, 없으면 그 트레이더의 이전 행 사진을 이어 쓴다.
 async function getTraderImage(traderName: string): Promise<string | null> {
+  const configured = TRADERS.find((trader) => trader.traderName === traderName)?.traderImage;
+  if (configured) return configured;
+
   const { data } = await supabase
     .from("positions")
     .select("trader_image")
