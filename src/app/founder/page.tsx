@@ -13,6 +13,13 @@ import { displaySymbol } from "@/lib/symbol";
 
 export const dynamic = "force-dynamic";
 
+// 운영자 본인의 매매원칙. 바꾸려면 여기를 고치면 된다.
+const TRADING_PRINCIPLES = [
+  "욕심을 절제하고, 손절은 짧고 익절은 긴 근거가 많은 자리만 진입한다 (손익비 2 이상)",
+  "분할 매수, 분할 매도는 신이다.",
+  "SL만큼은 절대 건드리지 말 것",
+];
+
 function formatUsd(n: number) {
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -39,6 +46,10 @@ export default async function FounderPage() {
       getMonthlyPnl(),
       getUsdtKrwRate(),
     ]);
+  // null(SL 여부를 알 수 없음)은 경고하지 않는다.
+  const positionsWithoutStopLoss = (positions ?? []).filter(
+    (position) => position.hasStopLoss === false,
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
@@ -56,6 +67,30 @@ export default async function FounderPage() {
             승률은 부분청산을 포지션 하나로 묶어서, 실현손익이 그 포지션 증거금의 +3% 넘으면 승, -3%
             미만이면 패, 그 사이는 무승부로 세. 무승부는 승률 계산에서 빼.
           </p>
+
+          {positionsWithoutStopLoss.length > 0 && (
+            // 원칙 3번 위반을 놓치지 않게 맨 위에서 깜빡인다 (동작 줄이기 설정이면 깜빡임 없음).
+            <div className="mb-4 rounded-2xl border-2 border-red-500 bg-red-50 p-4 motion-safe:animate-pulse dark:bg-red-950/40">
+              <p className="text-sm font-extrabold text-red-600 dark:text-red-400 sm:text-base">
+                🚨 SL 없는 포지션 {positionsWithoutStopLoss.length}개
+              </p>
+              <p className="mt-1 text-xs text-red-600 dark:text-red-300 sm:text-sm">
+                {positionsWithoutStopLoss
+                  .map((position) => displaySymbol(position.symbol))
+                  .join(", ")}{" "}
+                — 원칙 3. {TRADING_PRINCIPLES[2]}
+              </p>
+            </div>
+          )}
+
+          <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-gray-100">매매원칙</h2>
+            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-gray-700 dark:text-gray-300 sm:text-base">
+              {TRADING_PRINCIPLES.map((principle) => (
+                <li key={principle}>{principle}</li>
+              ))}
+            </ol>
+          </div>
 
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
@@ -180,12 +215,22 @@ function StatCard({
 function PositionCard({ position, krwRate }: { position: OwnerPosition; krwRate: number | null }) {
   const directionColor = position.direction === "Long" ? "text-red-500" : "text-blue-500";
   const pnlColor = position.unrealizedPnl >= 0 ? "text-red-500" : "text-blue-500";
+  const noStopLoss = position.hasStopLoss === false;
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <div
+      className={`rounded-2xl border bg-white p-4 shadow-sm dark:bg-gray-900 ${
+        noStopLoss ? "border-2 border-red-500" : "border-gray-100 dark:border-gray-800"
+      }`}
+    >
       <span className="text-base font-semibold text-gray-900 dark:text-gray-100 sm:text-lg">
         {displaySymbol(position.symbol)}{" "}
         <span className={`font-bold ${directionColor}`}>{position.direction}</span>
+        {noStopLoss && (
+          <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 align-middle text-xs font-bold text-white motion-safe:animate-pulse">
+            SL 없음
+          </span>
+        )}
       </span>
 
       <div className="mt-2 flex items-baseline justify-between gap-2">

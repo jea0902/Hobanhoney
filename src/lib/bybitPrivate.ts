@@ -86,6 +86,42 @@ export interface OwnerPosition {
   unrealizedPnl: number;
   returnOnEquityPercent: number;
   openedAt: string;
+  // 손절(SL) 설정 여부. 조건부 주문 조회에 실패하면 알 수 없어서 null (잘못된 경고를 띄우지 않으려고).
+  hasStopLoss: boolean | null;
+}
+
+interface RawStopOrder {
+  symbol: string;
+  stopOrderType: string;
+  reduceOnly: boolean;
+}
+
+// 포지션 전체 손절(tpslMode Full)은 포지션의 stopLoss 값에 나오지만, 부분 손절(PartialStopLoss)이나
+// 직접 건 손절 주문(reduceOnly Stop)은 조건부 주문 목록에만 있다. 손절이 걸린 종목 목록을 돌려준다.
+async function getStopLossSymbols(): Promise<Set<string> | null> {
+  const symbols = new Set<string>();
+  let cursor = "";
+  for (let i = 0; i < 5; i++) {
+    const params: Record<string, string> = {
+      category: "linear",
+      settleCoin: "USDT",
+      orderFilter: "StopOrder",
+      limit: "50",
+    };
+    if (cursor) params.cursor = cursor;
+    const json = await signedGet("/v5/order/realtime", params);
+    if (json?.retCode !== 0) return null;
+    for (const order of (json?.result?.list ?? []) as RawStopOrder[]) {
+      const isStopLoss =
+        order.stopOrderType === "StopLoss" ||
+        order.stopOrderType === "PartialStopLoss" ||
+        (order.stopOrderType === "Stop" && order.reduceOnly);
+      if (isStopLoss) symbols.add(order.symbol);
+    }
+    cursor = json?.result?.nextPageCursor ?? "";
+    if (!cursor) break;
+  }
+  return symbols;
 }
 
 interface RawOwnerPosition {
@@ -99,6 +135,7 @@ interface RawOwnerPosition {
   positionValue: string;
   positionIM: string;
   unrealisedPnl: string;
+  stopLoss: string;
   openTime: number;
 }
 
@@ -106,10 +143,10 @@ interface RawOwnerPosition {
 // getOwnerBalance와 같은 이유로 캐시 없이 매번 조회한다.
 export async function getOwnerPositions(): Promise<OwnerPosition[] | null> {
   try {
-    const json = await signedGet("/v5/position/list", {
-      category: "linear",
-      settleCoin: "USDT",
-    });
+    const [json, stopLossSymbols] = await Promise.all([
+      signedGet("/v5/position/list", { category: "linear", settleCoin: "USDT" }),
+      getStopLossSymbols().catch(() => null),
+    ]);
     const list = json?.result?.list as RawOwnerPosition[] | undefined;
     if (json?.retCode !== 0 || !Array.isArray(list)) {
       logEvent(
@@ -136,6 +173,12 @@ export async function getOwnerPositions(): Promise<OwnerPosition[] | null> {
         unrealizedPnl,
         returnOnEquityPercent: positionIM > 0 ? (unrealizedPnl / positionIM) * 100 : 0,
         openedAt: new Date(position.openTime).toISOString(),
+        hasStopLoss:
+          Number(position.stopLoss || 0) > 0
+            ? true
+            : stopLossSymbols === null
+              ? null
+              : stopLossSymbols.has(position.symbol),
       };
     });
   } catch (error) {
