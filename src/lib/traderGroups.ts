@@ -1,5 +1,6 @@
 import type { PositionRow } from "@/types/position";
 import { getWinRate } from "@/lib/positionMath";
+import { getMarkPrice } from "@/lib/bybit";
 
 export interface TraderStats {
   wins: number;
@@ -23,6 +24,36 @@ export interface TraderGroup {
 export const UNTRACKED_TRADERS: Record<string, string> = {
   사또: "방송 화면을 볼 수 없어 자동 추적 중단",
 };
+
+// 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 트레이더마다 규모(수량 × 현재가)가 가장 큰
+// 열린 포지션 1개를 대표로 고른다. 홈 포지션 표·인간지표 컨센서스·역발상 신호등이 같은 기준을 쓴다.
+export async function withRepresentativePosition(traders: TraderGroup[]) {
+  return Promise.all(
+    traders.map(async (trader) => {
+      const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
+      if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
+        return { trader, markPrice: null as number | null };
+      }
+
+      const candidates = await Promise.all(
+        openActualRows.map(async (row) => ({ row, markPrice: await getMarkPrice(row.symbol!) })),
+      );
+      const positionValue = (c: (typeof candidates)[number]) =>
+        c.row.quantity! * (c.markPrice ?? c.row.entry_price!);
+      const top = candidates.sort((a, b) => positionValue(b) - positionValue(a))[0];
+      return { trader: { ...trader, openRow: top.row }, markPrice: top.markPrice };
+    }),
+  );
+}
+
+// 인간지표 컨센서스: 유튜버들의 대표 포지션 방향을 1인 1표로 센다.
+export function countDirections(traders: { trader: TraderGroup }[]) {
+  const directions = traders
+    .map(({ trader }) => trader.openRow?.direction)
+    .filter((direction) => direction !== undefined);
+  const shortCount = directions.filter((direction) => direction === "Short").length;
+  return { longCount: directions.length - shortCount, shortCount };
+}
 
 export function getTraderStats(rows: PositionRow[], traderName: string): TraderStats {
   const decided = rows.filter((row) => row.trader_name === traderName && row.result);

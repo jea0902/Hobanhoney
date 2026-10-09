@@ -4,7 +4,7 @@ function normalizeSymbol(symbol: string) {
   return symbol.replace(/\//g, "").toUpperCase();
 }
 
-// 역발상 신호등용 공개 데이터 3종. 실패하면 null을 돌려주고 신호등에서 "데이터 없음"으로 보여준다.
+// 역발상 신호등용 공개 데이터 2종. 실패하면 null을 돌려주고 신호등에서 "데이터 없음"으로 보여준다.
 
 // Bybit 계정 수 기준 롱/숏 비율(일봉). 개인 투자자가 어느 쪽에 쏠렸는지 보는 용도.
 export async function getLongShortRatio(
@@ -19,20 +19,6 @@ export async function getLongShortRatio(
     const latest = json?.result?.list?.[0];
     if (!latest) return null;
     return { longRatio: Number(latest.buyRatio), shortRatio: Number(latest.sellRatio) };
-  } catch {
-    return null;
-  }
-}
-
-export async function getFundingRate(symbol: string): Promise<number | null> {
-  try {
-    const res = await fetch(
-      `https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`,
-      { cache: "no-store" },
-    );
-    const json = await res.json();
-    const rate = json?.result?.list?.[0]?.fundingRate;
-    return rate ? Number(rate) : null;
   } catch {
     return null;
   }
