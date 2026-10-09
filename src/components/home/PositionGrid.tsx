@@ -8,6 +8,7 @@ import { getTraderGroups, UNTRACKED_TRADERS } from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
+import ContrarianSignal from "@/components/home/ContrarianSignal";
 
 const AVATAR_COLORS = ["bg-gray-400", "bg-gray-500", "bg-gray-600", "bg-gray-700", "bg-gray-800"];
 
@@ -112,6 +113,7 @@ export default async function PositionGrid() {
   return (
     <>
       {openDirections.length > 0 && <ConsensusBar longCount={longCount} shortCount={shortCount} />}
+      <ContrarianSignal youtuberLongCount={longCount} youtuberShortCount={shortCount} />
 
       {/* 모바일: 카드형 */}
       <div className="flex flex-col gap-3 sm:hidden">
