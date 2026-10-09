@@ -12,9 +12,11 @@ const ADMIN_SESSION_COOKIE = "admin_session";
 
 export async function login(formData: FormData) {
   const password = formData.get("password");
+  // 로그인 후 돌아갈 곳. 외부 사이트로 보내는 악용을 막으려고 허용한 경로만 받는다.
+  const next = formData.get("next") === "/founder" ? "/founder" : "/admin";
 
   if (password !== process.env.ADMIN_PASSWORD) {
-    redirect("/admin/login?error=1");
+    redirect(next === "/founder" ? "/admin/login?error=1&next=/founder" : "/admin/login?error=1");
   }
 
   cookies().set(ADMIN_SESSION_COOKIE, process.env.ADMIN_PASSWORD!, {
@@ -24,7 +26,7 @@ export async function login(formData: FormData) {
     path: "/",
   });
 
-  redirect("/admin");
+  redirect(next);
 }
 
 export async function logout() {
