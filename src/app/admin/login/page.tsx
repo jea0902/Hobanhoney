@@ -1,6 +1,10 @@
 import { login } from "../actions";
 
-export default function AdminLoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default function AdminLoginPage({
+  searchParams,
+}: {
+  searchParams: { error?: string; next?: string };
+}) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F5F6F8] p-6 dark:bg-gray-950">
       <form
@@ -8,6 +12,12 @@ export default function AdminLoginPage({ searchParams }: { searchParams: { error
         className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
       >
         <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">관리자 로그인</h1>
+        {searchParams.next === "/founder" && (
+          <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
+            운영자 포지션은 관리자만 볼 수 있어.
+          </p>
+        )}
+        <input type="hidden" name="next" value={searchParams.next ?? ""} />
         <input
           type="password"
           name="password"

@@ -7,34 +7,7 @@ import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
 import { getTraderGroups, UNTRACKED_TRADERS } from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
-import { getOwnerPositions } from "@/lib/bybitPrivate";
-import type { OwnerPosition } from "@/lib/bybitPrivate";
-import { getWinRateStats } from "@/lib/closedTrades";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
-
-const FOUNDER_NAME = "운영자";
-
-// 운영자 포지션 페이지의 실계좌 데이터를, 기존 트레이더 카드/테이블이 쓰는 형태로 변환한다.
-function founderRowFromPosition(position: OwnerPosition): PositionRow {
-  return {
-    id: "founder",
-    type: "actual",
-    trader_name: FOUNDER_NAME,
-    trader_image: null,
-    symbol: position.symbol,
-    leverage: position.leverage,
-    quantity: position.quantity,
-    entry_price: position.entryPrice,
-    liquidation_price: position.liquidationPrice,
-    quote: null,
-    direction: position.direction,
-    result: null,
-    result_note: null,
-    result_pnl_percent: null,
-    result_recorded_at: null,
-    created_at: position.openedAt,
-  };
-}
 
 const AVATAR_COLORS = ["bg-gray-400", "bg-gray-500", "bg-gray-600", "bg-gray-700", "bg-gray-800"];
 
@@ -104,59 +77,33 @@ export default async function PositionGrid() {
 
   const traders = getTraderGroups(positions);
 
-  const [regularTradersWithMarkPrice, usdtKrwRate, ownerPositions, ownerWinRate] =
-    await Promise.all([
-      Promise.all(
-        traders.map(async (trader) => {
-          // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 규모(수량 × 현재가)가 가장 큰 1개만 보여준다.
-          const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
-          if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
-            return { trader, markPrice: null };
-          }
+  // 운영자 포지션은 관리자 전용 페이지(/founder)에서만 보여주고 홈에는 넣지 않는다.
+  const [tradersWithMarkPrice, usdtKrwRate] = await Promise.all([
+    Promise.all(
+      traders.map(async (trader) => {
+        // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 규모(수량 × 현재가)가 가장 큰 1개만 보여준다.
+        const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
+        if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
+          return { trader, markPrice: null };
+        }
 
-          const candidates = await Promise.all(
-            openActualRows.map(async (row) => ({
-              row,
-              markPrice: await getMarkPrice(row.symbol!),
-            })),
-          );
-          const positionValue = (c: (typeof candidates)[number]) =>
-            c.row.quantity! * (c.markPrice ?? c.row.entry_price!);
-          const top = candidates.sort((a, b) => positionValue(b) - positionValue(a))[0];
-          return { trader: { ...trader, openRow: top.row }, markPrice: top.markPrice };
-        }),
-      ),
-      getUsdtKrwRate(),
-      getOwnerPositions(),
-      getWinRateStats(),
-    ]);
+        const candidates = await Promise.all(
+          openActualRows.map(async (row) => ({
+            row,
+            markPrice: await getMarkPrice(row.symbol!),
+          })),
+        );
+        const positionValue = (c: (typeof candidates)[number]) =>
+          c.row.quantity! * (c.markPrice ?? c.row.entry_price!);
+        const top = candidates.sort((a, b) => positionValue(b) - positionValue(a))[0];
+        return { trader: { ...trader, openRow: top.row }, markPrice: top.markPrice };
+      }),
+    ),
+    getUsdtKrwRate(),
+  ]);
 
-  // 운영자 계정은 규모(포지션 가치) 가장 큰 종목 1개만 맨 아래에 보여준다.
-  const founderTopPosition = ownerPositions
-    ?.slice()
-    .sort((a, b) => b.positionValue - a.positionValue)[0];
-
-  const founderGroup: TraderGroup = {
-    traderName: FOUNDER_NAME,
-    traderImage: "/hodu-short.png",
-    rows: [],
-    openRow: founderTopPosition ? founderRowFromPosition(founderTopPosition) : null,
-    stats: {
-      wins: ownerWinRate.wins,
-      draws: ownerWinRate.draws,
-      losses: ownerWinRate.losses,
-      total: ownerWinRate.total,
-      winRate: ownerWinRate.winRate,
-    },
-  };
-
-  const tradersWithMarkPrice = [
-    ...regularTradersWithMarkPrice,
-    { trader: founderGroup, markPrice: founderTopPosition?.currentPrice ?? null },
-  ];
-
-  // 인간지표 컨센서스: 유튜버들(운영자 제외)의 대표 포지션 방향을 1인 1표로 센다.
-  const openDirections = regularTradersWithMarkPrice
+  // 인간지표 컨센서스: 유튜버들의 대표 포지션 방향을 1인 1표로 센다.
+  const openDirections = tradersWithMarkPrice
     .map(({ trader }) => trader.openRow?.direction)
     .filter((direction) => direction !== undefined);
   const shortCount = openDirections.filter((direction) => direction === "Short").length;
@@ -261,9 +208,8 @@ function Avatar({ trader }: { trader: TraderGroup }) {
   );
 }
 
-// 운영자는 실계좌 데이터라 별도 페이지(/founder)가 있고, 나머지는 트레이더별 기록 페이지로 보낸다.
 function traderHref(traderName: string) {
-  return traderName === FOUNDER_NAME ? "/founder" : `/traders/${encodeURIComponent(traderName)}`;
+  return `/traders/${encodeURIComponent(traderName)}`;
 }
 
 function TraderCell({ trader }: { trader: TraderGroup }) {
