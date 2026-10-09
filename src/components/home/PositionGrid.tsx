@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
 import { displaySymbol } from "@/lib/symbol";
-import { getMarkPrice } from "@/lib/bybit";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
-import { getTraderGroups, UNTRACKED_TRADERS } from "@/lib/traderGroups";
+import {
+  countDirections,
+  getTraderGroups,
+  UNTRACKED_TRADERS,
+  withRepresentativePosition,
+} from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
@@ -79,39 +83,14 @@ export default async function PositionGrid() {
 
   // 운영자 포지션은 관리자 전용 페이지(/founder)에서만 보여주고 홈에는 넣지 않는다.
   const [tradersWithMarkPrice, usdtKrwRate] = await Promise.all([
-    Promise.all(
-      traders.map(async (trader) => {
-        // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 규모(수량 × 현재가)가 가장 큰 1개만 보여준다.
-        const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
-        if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
-          return { trader, markPrice: null };
-        }
-
-        const candidates = await Promise.all(
-          openActualRows.map(async (row) => ({
-            row,
-            markPrice: await getMarkPrice(row.symbol!),
-          })),
-        );
-        const positionValue = (c: (typeof candidates)[number]) =>
-          c.row.quantity! * (c.markPrice ?? c.row.entry_price!);
-        const top = candidates.sort((a, b) => positionValue(b) - positionValue(a))[0];
-        return { trader: { ...trader, openRow: top.row }, markPrice: top.markPrice };
-      }),
-    ),
+    withRepresentativePosition(traders),
     getUsdtKrwRate(),
   ]);
-
-  // 인간지표 컨센서스: 유튜버들의 대표 포지션 방향을 1인 1표로 센다.
-  const openDirections = tradersWithMarkPrice
-    .map(({ trader }) => trader.openRow?.direction)
-    .filter((direction) => direction !== undefined);
-  const shortCount = openDirections.filter((direction) => direction === "Short").length;
-  const longCount = openDirections.length - shortCount;
+  const { longCount, shortCount } = countDirections(tradersWithMarkPrice);
 
   return (
     <>
-      {openDirections.length > 0 && <ConsensusBar longCount={longCount} shortCount={shortCount} />}
+      {longCount + shortCount > 0 && <ConsensusBar longCount={longCount} shortCount={shortCount} />}
 
       {/* 모바일: 카드형 */}
       <div className="flex flex-col gap-3 sm:hidden">
