@@ -3,9 +3,10 @@ import { cookies } from "next/headers";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const title = "호반꿀 - 인간지표 사이트";
+// 검색 결과에 그대로 나오는 문구. 실제로 있는 기능만 적는다 (없는 기능을 적으면 애드센스·검색 품질 평가에 불리).
+const title = "호반꿀 - 코인 유튜버 실시간 포지션 추적 | 인간지표";
 const description =
-  "박호두, 사또, 짭구 등 유튜버 트레이더들의 실시간 포지션과 승률을 추적하고 강제청산 알림을 제공하며, 공포탐욕지수·금리·CPI 등 주요 투자 지표를 한눈에 보여주는 인간지표 대시보드.";
+  "박호두·짭구·웨돔·용느 등 코인 유튜버 트레이더들이 방송에서 잡은 실제 포지션을 실시간으로 추적하는 인간지표 사이트. 트레이더별 승률·롱숏 성향, 인간지표 컨센서스, 공포탐욕지수·RSI로 보는 역발상 신호등까지 한눈에.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
