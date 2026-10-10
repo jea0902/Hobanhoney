@@ -3,6 +3,7 @@ import { getMonthlyHumanIndicator } from "@/lib/humanIndicator";
 import type { MonthlyHumanIndicator } from "@/lib/humanIndicator";
 import ContrarianSignal from "@/components/home/ContrarianSignal";
 import BtcLivePrice from "@/components/home/BtcLivePrice";
+import { traderHref } from "@/lib/founderTrader";
 
 export default async function Hero() {
   const humanIndicator = await getMonthlyHumanIndicator();
@@ -65,7 +66,7 @@ function HumanIndicatorOfMonth({
 
   return (
     <Link
-      href={`/traders/${encodeURIComponent(traderName)}`}
+      href={traderHref(traderName)}
       title="이번 달 종료 수익률 + 미실현 수익률 합계 꼴찌"
       className="group flex shrink-0 items-center gap-3"
     >

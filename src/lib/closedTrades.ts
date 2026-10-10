@@ -118,6 +118,18 @@ export async function getWinRateStats(): Promise<WinRateStats> {
   };
 }
 
+// 이달의 인간지표용: 그 달(KST)에 끝난 운영자 포지션들의 수익률(손익 ÷ 증거금) 합계.
+// 유튜버의 result_pnl_percent 합과 같은 단위다. 증거금 정보가 없는 옛 기록은 비율을 낼 수 없어 뺀다.
+export async function getMonthReturnPercentSum(month: string) {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("closed_trades")
+    .select("closed_pnl, direction, symbol, avg_entry_price, entry_value, leverage, closed_at");
+  return groupIntoTrades((data ?? []) as ClosedTradeRow[])
+    .filter((trade) => trade.margin > 0 && toKstMonth(trade.lastClosedAt) === month)
+    .reduce((sum, trade) => sum + (trade.pnl / trade.margin) * 100, 0);
+}
+
 // 월 구분은 한국시간 기준. "2026-04" 형태.
 export function toKstMonth(iso: string) {
   return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);

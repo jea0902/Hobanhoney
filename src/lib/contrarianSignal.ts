@@ -2,6 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getCryptoFearGreed } from "@/lib/alternativeMe";
 import { getDailyCloses, getLongShortRatio } from "@/lib/bybit";
 import { countDirections, getTraderGroups, withRepresentativePosition } from "@/lib/traderGroups";
+import { getFounderTrader } from "@/lib/founderTrader";
 import type { PositionRow } from "@/types/position";
 
 // 역발상 신호등 기준값. 숫자만 바꾸면 된다. (2026-10-09 백테스트 근거는 TODO.md 15번)
@@ -56,11 +57,14 @@ function getRsi(closes: number[], period = 14): number | null {
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
-// 홈 포지션 표의 인간지표 컨센서스와 같은 기준(트레이더별 대표 포지션 1인 1표)으로 센다.
+// 홈 포지션 표의 인간지표 컨센서스와 같은 기준(트레이더별 대표 포지션 1인 1표, 최무상 포함)으로 센다.
 async function getYoutuberCounts() {
   const { data } = await getSupabase().from("positions").select("*");
-  const traders = await withRepresentativePosition(getTraderGroups((data ?? []) as PositionRow[]));
-  return countDirections(traders);
+  const [youtubers, founder] = await Promise.all([
+    withRepresentativePosition(getTraderGroups((data ?? []) as PositionRow[])),
+    getFounderTrader(),
+  ]);
+  return countDirections([...youtubers, founder]);
 }
 
 const percent = (ratio: number) => `${(ratio * 100).toFixed(0)}%`;

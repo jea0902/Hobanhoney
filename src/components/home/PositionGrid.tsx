@@ -12,6 +12,7 @@ import {
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
+import { getFounderTrader, traderHref } from "@/lib/founderTrader";
 
 const AVATAR_COLORS = ["bg-gray-400", "bg-gray-500", "bg-gray-600", "bg-gray-700", "bg-gray-800"];
 
@@ -81,11 +82,13 @@ export default async function PositionGrid() {
 
   const traders = getTraderGroups(positions);
 
-  // 운영자 포지션은 관리자 전용 페이지(/founder)에서만 보여주고 홈에는 넣지 않는다.
-  const [tradersWithMarkPrice, usdtKrwRate] = await Promise.all([
+  // 운영자 최무상은 유튜버와 같은 트레이더 한 명으로 맨 아래에 붙이고, 컨센서스에도 1표로 센다.
+  const [youtubers, founder, usdtKrwRate] = await Promise.all([
     withRepresentativePosition(traders),
+    getFounderTrader(),
     getUsdtKrwRate(),
   ]);
+  const tradersWithMarkPrice = [...youtubers, founder];
   const { longCount, shortCount } = countDirections(tradersWithMarkPrice);
 
   return (
@@ -185,10 +188,6 @@ function Avatar({ trader }: { trader: TraderGroup }) {
       {avatarInitial}
     </div>
   );
-}
-
-function traderHref(traderName: string) {
-  return `/traders/${encodeURIComponent(traderName)}`;
 }
 
 function TraderCell({ trader }: { trader: TraderGroup }) {

@@ -1,5 +1,7 @@
 import { getSupabase } from "@/lib/supabase";
-import { toKstMonth } from "@/lib/closedTrades";
+import { getMonthReturnPercentSum, toKstMonth } from "@/lib/closedTrades";
+import { getOwnerPositions } from "@/lib/bybitPrivate";
+import { FOUNDER_IMAGE, FOUNDER_TRADER_NAME } from "@/lib/founderTrader";
 import { getMarkPrice } from "@/lib/bybit";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
 import { UNTRACKED_TRADERS } from "@/lib/traderGroups";
@@ -56,6 +58,21 @@ export async function getMonthlyHumanIndicator(): Promise<MonthlyHumanIndicator 
         null,
       returnPercent: closedSum + openSum,
     };
+  });
+
+  // 운영자 최무상도 같은 기준(이번 달 종료 수익률 합 + 열린 포지션 미실현 수익률 합)으로 넣는다.
+  const [founderClosedSum, founderPositions] = await Promise.all([
+    getMonthReturnPercentSum(month),
+    getOwnerPositions(),
+  ]);
+  const founderOpenSum = (founderPositions ?? []).reduce(
+    (sum, position) => sum + position.returnOnEquityPercent,
+    0,
+  );
+  candidates.push({
+    traderName: FOUNDER_TRADER_NAME,
+    traderImage: FOUNDER_IMAGE,
+    returnPercent: founderClosedSum + founderOpenSum,
   });
 
   candidates.sort((a, b) => a.returnPercent - b.returnPercent);

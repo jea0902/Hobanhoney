@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getSupabase } from "@/lib/supabase";
+import { AI_TRADERS } from "@/lib/aiInvestors";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -15,6 +16,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/rankers`, changeFrequency: "hourly", priority: 0.8 },
     ...traderNames.map((name) => ({
       url: `${siteUrl}/traders/${encodeURIComponent(name)}`,
+      changeFrequency: "daily" as const,
+      priority: 0.7,
+    })),
+    ...AI_TRADERS.map((ai) => ({
+      url: `${siteUrl}/ai/${ai.id}`,
       changeFrequency: "daily" as const,
       priority: 0.7,
     })),
