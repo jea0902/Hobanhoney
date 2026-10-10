@@ -15,24 +15,41 @@ const STOCK_NOTE =
   "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 모든 매수, 매도는 그날 종가로 체결했다고 가정함 " +
   "(배당은 배당락일에 반영, 매일 오전 7시 30분에 업데이트)";
 
+// 화면에 나오는 순서. AI 호반꿀(사이트 대표 AI)을 맨 위에 둔다.
 export const AI_TRADERS: AiMeta[] = [
+  {
+    id: "hobanhoney",
+    name: "AI 호반꿀",
+    summary: "인간지표 박호두의 반대 포지션",
+    rules: [
+      "박호두와 같은 종목·레버리지·진입가로 반대 포지션, 박호두 종료 시 함께 종료",
+      "매번 시드의 10%만 투입, 연속 2회 강제청산 시 7일 휴식",
+      "2026-09-27 이후 기록부터 추종",
+    ],
+    note:
+      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 박호두의 진입가·종료가로 체결했다고 가정함 " +
+      "(강제청산은 Bybit 1분봉으로 판정, 수수료 0.055% 반영·펀딩비 미반영, 매일 오전 7시 30분에 업데이트)",
+  },
   {
     id: "wallstreet",
     name: "AI 월가",
-    summary: "S&P500·나스닥100 지수 적립식",
+    summary: "미국 주식·채권·금·비트코인 자산배분",
     rules: [
-      "매월 입금액으로 VOO(S&P500)·QQQ(나스닥100)를 50%씩 매수",
-      "배당은 같은 ETF에 재투자, 매도 없음",
+      "목표 비중: S&P500(VOO) 30%, 나스닥100(QQQ) 30%, 단기 미국채(SGOV) 20%, 금(GLD) 10%, 비트코인(IBIT) 10%",
+      "매월 입금액은 목표 비중보다 모자란 자산부터 매수",
+      "목표 비중에서 5%p 넘게 벗어난 자산이 있으면 전체를 목표 비중으로 리밸런싱",
     ],
     note: STOCK_NOTE,
   },
   {
     id: "korean_ant",
     name: "AI 한국개미",
-    summary: "코스피200 원화 적립식",
+    summary: "국내 주식·채권·금·비트코인 자산배분",
     rules: [
-      "매월 입금액으로 KODEX 200 매수, 배당 재투자",
-      "원화로 매수하고 달러로 환산해 표시 (환율 손익 포함)",
+      "목표 비중: 코스피200(KODEX 200) 50%, 코스닥150(KODEX 코스닥150) 20%, 국고채 3년(KODEX 국고채3년) 15%, 금(ACE KRX금현물) 10%, 비트코인 5%",
+      "매월 입금액을 목표 비중대로 매수",
+      "매년 12월 마지막 거래일에 전량 매도 후 1월 10일에 목표 비중대로 재매수",
+      "원화로 매수하고 달러로 환산해 표시 (환율 손익 포함), 비트코인은 국내 현물 ETF가 없어 직접 보유로 계산",
     ],
     note: STOCK_NOTE,
   },
@@ -54,7 +71,7 @@ export const AI_TRADERS: AiMeta[] = [
     rules: [
       "10년간 ROE가 꾸준히 높고 부채가 적은 우량주만 선별 (버핏 1987년 주주서한 기준)",
       "현금흐름 대비 주가가 장기 국채 금리보다 매력적일 때만 매수, 최대 10종목",
-      "품질이 훼손될 때만 매도, 금·채권은 보유하지 않음",
+      "주가와 관계없이 우량주 기준(ROE·부채)에서 벗어날 때만 매도, 금·채권은 보유하지 않음",
     ],
     note: STOCK_NOTE,
   },
@@ -69,19 +86,6 @@ export const AI_TRADERS: AiMeta[] = [
       "실제 버리가 쓴 풋옵션 대신 공매도로 구현",
     ],
     note: STOCK_NOTE,
-  },
-  {
-    id: "hobanhoney",
-    name: "AI 호반꿀",
-    summary: "인간지표 박호두의 반대 포지션",
-    rules: [
-      "박호두와 같은 종목·레버리지·진입가로 반대 포지션, 박호두 종료 시 함께 종료",
-      "매번 시드의 10%만 투입, 연속 2회 강제청산 시 7일 휴식",
-      "2026-09-27 이후 기록부터 추종",
-    ],
-    note:
-      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 박호두의 진입가·종료가로 체결했다고 가정함 " +
-      "(강제청산은 Bybit 1분봉으로 판정, 수수료 0.055% 반영·펀딩비 미반영, 매일 오전 7시 30분에 업데이트)",
   },
 ];
 
@@ -111,13 +115,21 @@ export interface AiTrade {
   reason: string;
 }
 
-// 한국 ETF는 원화, 나머지는 USD로 거래한다.
+// 한국 ETF와 AI 한국개미의 비트코인(BTC-KRW)은 원화, 나머지는 USD로 거래한다.
 export function isKrwSymbol(symbol: string) {
-  return symbol.endsWith(".KS");
+  return symbol.endsWith(".KS") || symbol.endsWith("-KRW");
 }
 
+const AI_SYMBOL_NAMES: Record<string, string> = {
+  "069500.KS": "KODEX 200",
+  "229200.KS": "KODEX 코스닥150",
+  "114260.KS": "KODEX 국고채3년",
+  "411060.KS": "ACE KRX금현물",
+  "BTC-KRW": "비트코인",
+};
+
 export function displayAiSymbol(symbol: string) {
-  if (symbol === "069500.KS") return "KODEX 200";
+  if (AI_SYMBOL_NAMES[symbol]) return AI_SYMBOL_NAMES[symbol];
   return displaySymbol(symbol);
 }
 
@@ -156,28 +168,58 @@ export function largestHolding(holdings: AiHolding[]) {
   return holdings.slice().sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0] ?? null;
 }
 
+// 연 수익률 = 올해 손익 ÷ 전체 누적 입금. 매년 1월 1일에 0부터 다시 시작한다.
+// 올해 손익 = 지금 자산 − 작년 말 자산 − 올해 입금 (작년 기록이 없으면 작년 말 자산·입금은 0).
+export function annualReturnPercent(latest: AiEquity, lastYearEnd: AiEquity | null) {
+  if (latest.invested <= 0) return null;
+  const depositsThisYear = latest.invested - (lastYearEnd?.invested ?? 0);
+  const profitThisYear = latest.equity - (lastYearEnd?.equity ?? 0) - depositsThisYear;
+  return (profitThisYear / latest.invested) * 100;
+}
+
+// 작년 마지막 날 기록 (equity는 날짜순)
+export function lastYearEndOf(equity: AiEquity[], latest: AiEquity) {
+  return equity.filter((row) => row.date < `${latest.date.slice(0, 4)}-01-01`).at(-1) ?? null;
+}
+
+async function getLatestAndLastYearEnd(id: string) {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("ai_equity_daily")
+    .select("date, cash, equity, invested")
+    .eq("ai", id)
+    .order("date", { ascending: false })
+    .limit(1);
+  const latest = data?.[0] ? toEquity(data[0] as AiEquity) : null;
+  if (!latest) return { latest: null, lastYearEnd: null };
+  const { data: before } = await supabase
+    .from("ai_equity_daily")
+    .select("date, cash, equity, invested")
+    .eq("ai", id)
+    .lt("date", `${latest.date.slice(0, 4)}-01-01`)
+    .order("date", { ascending: false })
+    .limit(1);
+  return { latest, lastYearEnd: before?.[0] ? toEquity(before[0] as AiEquity) : null };
+}
+
 export async function getAiSummaries() {
   const supabase = getSupabase();
-  const [{ data: holdingRows }, latestRows] = await Promise.all([
+  const [{ data: holdingRows }, equities] = await Promise.all([
     supabase.from("ai_holdings").select("*"),
-    Promise.all(
-      AI_TRADERS.map((meta) =>
-        supabase
-          .from("ai_equity_daily")
-          .select("date, cash, equity, invested")
-          .eq("ai", meta.id)
-          .order("date", { ascending: false })
-          .limit(1),
-      ),
-    ),
+    Promise.all(AI_TRADERS.map((meta) => getLatestAndLastYearEnd(meta.id))),
   ]);
 
   return AI_TRADERS.map((meta, i) => {
-    const latest = latestRows[i].data?.[0];
+    const { latest, lastYearEnd } = equities[i];
     const holdings = ((holdingRows ?? []) as HoldingDbRow[])
       .filter((row) => row.ai === meta.id)
       .map(toHolding);
-    return { meta, latest: latest ? toEquity(latest as AiEquity) : null, holdings };
+    return {
+      meta,
+      latest,
+      annualReturn: latest ? annualReturnPercent(latest, lastYearEnd) : null,
+      holdings,
+    };
   });
 }
 

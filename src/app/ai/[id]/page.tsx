@@ -7,9 +7,11 @@ import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import AiName from "@/components/ai/AiName";
 import {
   AI_TRADERS,
+  annualReturnPercent,
   displayAiSymbol,
   getAiDetail,
   getMonthlyPerformance,
+  lastYearEndOf,
   isKrwSymbol,
 } from "@/lib/aiInvestors";
 import type { AiTrade } from "@/lib/aiInvestors";
@@ -72,8 +74,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
   const isFutures = meta.id === "hobanhoney";
 
   const latest = equity.at(-1);
-  const returnPercent =
-    latest && latest.invested > 0 ? (latest.equity / latest.invested - 1) * 100 : null;
+  const returnPercent = latest ? annualReturnPercent(latest, lastYearEndOf(equity, latest)) : null;
   const returnColor =
     returnPercent === null
       ? "text-gray-400"
@@ -94,7 +95,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <SummaryCard label="수익률">
+            <SummaryCard label={`연 수익률${latest ? ` (${latest.date.slice(0, 4)}년)` : ""}`}>
               <span className={returnColor}>
                 {returnPercent === null
                   ? "—"

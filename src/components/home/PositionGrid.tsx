@@ -3,12 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { displaySymbol } from "@/lib/symbol";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
-import {
-  countDirections,
-  getTraderGroups,
-  UNTRACKED_TRADERS,
-  withRepresentativePosition,
-} from "@/lib/traderGroups";
+import { countDirections, getTraderGroups, withRepresentativePosition } from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
@@ -258,11 +253,7 @@ function TraderCard({
         </div>
       </div>
 
-      {!row && (
-        <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
-          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
-        </p>
-      )}
+      {!row && <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">포지션 없음</p>}
 
       {row?.type === "statement" && (
         <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
@@ -346,7 +337,7 @@ function TraderRow({
       <tr className="border-b border-gray-50 last:border-0 dark:border-gray-800">
         <TraderCell trader={trader} />
         <td colSpan={7} className="px-4 py-3 text-base text-gray-400 dark:text-gray-500">
-          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
+          포지션 없음
         </td>
         <WinRateCell stats={trader.stats} />
         {elapsedCell}

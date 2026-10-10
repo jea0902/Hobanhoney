@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getSupabase } from "@/lib/supabase";
-import { getTraderStats, UNTRACKED_TRADERS } from "@/lib/traderGroups";
+import { getTraderStats, HIDDEN_TRADERS } from "@/lib/traderGroups";
 import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
 import type { PositionRow, Direction } from "@/types/position";
@@ -73,15 +73,14 @@ export async function generateMetadata({
 export default async function TraderPage({ params }: { params: { name: string } }) {
   const name = decodeURIComponent(params.name);
   const rows = await getTraderRows(name);
-  if (rows.length === 0) notFound();
+  if (rows.length === 0 || HIDDEN_TRADERS.includes(name)) notFound();
 
   const stats = getTraderStats(rows, name);
   const long = directionStats(rows, "Long");
   const short = directionStats(rows, "Short");
   const symbols = topSymbols(rows);
-  const untrackedReason = UNTRACKED_TRADERS[name];
-  // 추적 중단된 트레이더의 열린 포지션은 마지막 수동 기록일 뿐이라 "진행 중"으로 보여주지 않는다.
-  const openRows = untrackedReason ? [] : rows.filter((row) => !row.result);
+
+  const openRows = rows.filter((row) => !row.result);
   const decidedRows = rows.filter((row) => row.result);
   const pnlValues = decidedRows
     .filter((row) => row.result_pnl_percent !== null)
@@ -110,7 +109,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 {name} 포지션 기록
               </h1>
               <p className="mt-1 text-sm text-gray-400">
-                {untrackedReason ?? `${formatKstDate(firstRecordedAt)}부터 추적 중`}
+                {`${formatKstDate(firstRecordedAt)}부터 추적 중`}
               </p>
             </div>
           </div>
@@ -140,7 +139,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
             </p>
             {stats.total > 0 && stats.total < 10 && (
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                아직 10건 미만이라 승률은 참고만 해.
+                아직 10건 미만이므로 승률은 참고용임.
               </p>
             )}
           </div>
@@ -178,7 +177,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 <Link href="/" className="underline">
                   홈
                 </Link>
-                에서 확인해.
+                에서 확인 가능.
               </p>
               <HistoryTable rows={openRows} />
             </div>

@@ -43,7 +43,7 @@ export const TRADERS = [
   },
   // 사또(@live-streamersatto, UCnXe6v0-5vmMMRU2qx0XwUw)는 방송마다 커스텀 썸네일을 걸어서 라이브 썸네일에
   // 실제 화면이 안 나온다 → 자동 추적 불가로 제외 (2026-10-06). 사이트에선 src/lib/traderGroups.ts의
-  // UNTRACKED_TRADERS로 "추적 중단" 표시. 새 트레이더도 같은 경우면 UNCHANGED_THUMBNAIL_ALERT_MS 알림으로 드러난다.
+  // HIDDEN_TRADERS로 숨김 처리 (2026-10-11). 새 트레이더도 같은 경우면 UNCHANGED_THUMBNAIL_ALERT_MS 알림으로 드러난다.
   // (라이브 썸네일과 영상 대표 이미지를 비교하는 방법은 안 됨 — 커스텀 썸네일이 없는 라이브도 둘이 똑같다.)
   // 자두두(Jadoodoo, UCIOHzEDwgUuLBZwPKEUt1AQ)도 같은 이유로 제외 (2026-10-09 라이브 썸네일 확인).
   // 자두두 사진: IMAGE_BASE + "/jadoodoo.png" (수동으로 행을 넣을 때 쓸 것)

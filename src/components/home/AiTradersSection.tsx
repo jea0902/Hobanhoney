@@ -10,12 +10,6 @@ function formatUsd(n: number) {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-function returnPercentOf(summary: Summary) {
-  const latest = summary.latest;
-  if (!latest || latest.invested <= 0) return null;
-  return (latest.equity / latest.invested - 1) * 100;
-}
-
 function returnColor(n: number | null) {
   if (n === null) return "text-gray-400";
   return n >= 0 ? "text-red-500" : "text-blue-500";
@@ -73,7 +67,7 @@ export default async function AiTradersSection() {
         {/* 모바일: 카드형 */}
         <div className="flex flex-col gap-3 sm:hidden">
           {summaries.map((summary) => {
-            const rate = returnPercentOf(summary);
+            const rate = summary.annualReturn;
             const equity = summary.latest?.equity ?? 0;
             return (
               <Link
@@ -83,9 +77,12 @@ export default async function AiTradersSection() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <AiName name={summary.meta.name} className="text-xl" />
-                  <p className={`shrink-0 text-xl font-extrabold ${returnColor(rate)}`}>
-                    {formatReturn(rate)}
-                  </p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[11px] text-gray-400">연 수익률</p>
+                    <p className={`text-xl font-extrabold ${returnColor(rate)}`}>
+                      {formatReturn(rate)}
+                    </p>
+                  </div>
                 </div>
                 <div className="mt-3 flex items-baseline justify-between gap-2 text-sm">
                   <HoldingLabel holding={largestHolding(summary.holdings)} equity={equity} />
@@ -106,21 +103,23 @@ export default async function AiTradersSection() {
             <table className="w-full min-w-[720px] border-collapse">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
-                  {["AI", "대표 종목", "보유", "총자산", "누적 입금", "수익률"].map((header, i) => (
-                    <th
-                      key={header}
-                      className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-400 dark:text-gray-500 ${
-                        i < 2 ? "text-left" : "text-right"
-                      }`}
-                    >
-                      {header}
-                    </th>
-                  ))}
+                  {["AI", "대표 종목", "보유", "총자산", "누적 입금", "연 수익률"].map(
+                    (header, i) => (
+                      <th
+                        key={header}
+                        className={`whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-400 dark:text-gray-500 ${
+                          i < 2 ? "text-left" : "text-right"
+                        }`}
+                      >
+                        {header}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {summaries.map((summary) => {
-                  const rate = returnPercentOf(summary);
+                  const rate = summary.annualReturn;
                   const equity = summary.latest?.equity ?? 0;
                   return (
                     <tr
