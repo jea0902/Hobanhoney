@@ -25,6 +25,9 @@ export type AiId = (typeof AI_IDS)[number];
 
 // 위키백과 변경 표엔 CIK가 없고, 인수로 상장폐지된 회사는 SEC 티커 목록에서도 빠진다.
 // 한 번 ai_universe에 기록되면 이후엔 DB 값을 쓰므로, 이 목록은 처음 기록 전에 빠진 회사만 필요하다.
+// 편출됐지만 야후 시세가 아예 없어 계산할 수 없는 종목 (2026-10-11 확인). 매일 오류 로그가 쌓이지 않게 조용히 뺀다.
+export const UNAVAILABLE_REMOVED = ["CTRA", "HOLX"];
+
 export const KNOWN_CIKS: Record<string, string> = {
   EA: "0000712515", // 2026-08 인수로 상장폐지 (SEC 목록에서 빠짐)
   AVB: "0000915912", // 2026-08 인수로 상장폐지 (SEC 목록에서 빠짐)

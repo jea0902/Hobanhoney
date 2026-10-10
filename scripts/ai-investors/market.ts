@@ -1,6 +1,12 @@
 // DB에 쌓인 원본 데이터를 읽고, 출처에서 새로 받은 만큼 DB에 더한 뒤, 계산에 쓸 형태로 묶는다.
 import { setTimeout as sleep } from "node:timers/promises";
-import { KNOWN_CIKS, PRICE_HISTORY_FROM, SP500_HISTORY_FROM, START } from "./config.ts";
+import {
+  KNOWN_CIKS,
+  PRICE_HISTORY_FROM,
+  SP500_HISTORY_FROM,
+  START,
+  UNAVAILABLE_REMOVED,
+} from "./config.ts";
 import { insertRows, logEvent, readAll, upsertRows } from "./db.ts";
 import {
   fetchCompanyFacts,
@@ -162,7 +168,7 @@ async function refreshUniverse(raw: Raw) {
     });
   }
   for (const [symbol, date] of removedOn) {
-    if (rows.has(symbol)) continue;
+    if (rows.has(symbol) || UNAVAILABLE_REMOVED.includes(symbol)) continue;
     const cik = stored.get(symbol)?.cik ?? secTickers.get(symbol) ?? KNOWN_CIKS[symbol];
     if (!cik) {
       await logEvent(
