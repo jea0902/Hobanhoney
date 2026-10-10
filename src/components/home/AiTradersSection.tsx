@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AI_COMMON_NOTE, displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
+import { displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
 import type { AiHolding } from "@/lib/aiInvestors";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
 
@@ -65,15 +65,14 @@ export default async function AiTradersSection() {
 
   return (
     <section className="px-6 py-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl xl:max-w-none">
         <h2 className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-gray-100 sm:text-sm">
           <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
           AI 트레이더
           <span className="text-gray-400">(매일 오전 7시 30분 갱신)</span>
         </h2>
         <p className="-mt-2 mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
-          각자 정해진 전략대로만 움직이는 가상 투자자. {AI_COMMON_NOTE} 이름 누르면 전략과 전체 보유
-          종목, 월별 성과 볼 수 있어.
+          정해진 전략대로만 매매하는 가상 투자자 (2026-03-06부터 매월 100만원 적립 가정)
         </p>
 
         {/* 모바일: 카드형 */}
@@ -90,12 +89,9 @@ export default async function AiTradersSection() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <AiAvatar />
-                    <div>
-                      <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                        {summary.meta.name}
-                      </p>
-                      <p className="text-xs text-gray-400">{summary.meta.summary}</p>
-                    </div>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {summary.meta.name}
+                    </p>
                   </div>
                   <p className={`shrink-0 text-xl font-extrabold ${returnColor(rate)}`}>
                     {formatReturn(rate)}
@@ -144,12 +140,9 @@ export default async function AiTradersSection() {
                       <td className="whitespace-nowrap px-4 py-3">
                         <Link href={`/ai/${summary.meta.id}`} className="flex items-center gap-2">
                           <AiAvatar />
-                          <div>
-                            <p className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
-                              {summary.meta.name}
-                            </p>
-                            <p className="text-xs text-gray-400">{summary.meta.summary}</p>
-                          </div>
+                          <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
+                            {summary.meta.name}
+                          </span>
                         </Link>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-base">

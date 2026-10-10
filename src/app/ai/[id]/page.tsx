@@ -5,7 +5,6 @@ import Footer from "@/components/home/Footer";
 import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import {
-  AI_COMMON_NOTE,
   AI_TRADERS,
   displayAiSymbol,
   getAiDetail,
@@ -115,9 +114,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
               <li key={rule}>{rule}</li>
             ))}
           </ul>
-          <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">
-            {AI_COMMON_NOTE} {meta.priceNote} 매일 오전 7시 30분에 처음부터 다시 계산해.
-          </p>
+          <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">{meta.note}</p>
         </section>
 
         <section>
@@ -139,7 +136,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
           </h2>
           {sortedHoldings.length === 0 ? (
             <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-400 dark:border-gray-800 dark:bg-gray-900">
-              지금은 현금만 들고 있어.
+              현재 현금만 보유
             </p>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">

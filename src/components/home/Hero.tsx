@@ -12,7 +12,7 @@ export default async function Hero() {
     <section className="relative overflow-hidden px-6 py-8 sm:py-10">
       <DecorativeOrb />
 
-      <div className="relative mx-auto flex max-w-6xl flex-col gap-5">
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-5 xl:max-w-none">
         <div className="flex items-center justify-between gap-4">
           {/* 모바일은 공간이 좁아서 가격을 제목 아래로, PC는 제목 오른쪽에 둔다. */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-10">

@@ -139,14 +139,14 @@ export default async function KeyIndicators() {
   ];
 
   return (
-    // 넓은 화면에선 오른쪽 열에 세로로 쌓고, 스크롤해도 화면에 붙어 있게 한다 (page.tsx 참고).
-    <aside className="px-6 py-10 xl:sticky xl:top-16 xl:max-h-[calc(100vh-4rem)] xl:self-start xl:overflow-y-auto xl:px-0">
-      <div className="mx-auto max-w-6xl">
+    // 넓은 화면에선 오른쪽 30% 열에 들어간다 (page.tsx 참고).
+    <aside className="px-6 py-10 xl:pl-0">
+      <div className="mx-auto max-w-6xl xl:max-w-none">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-gray-100">
           주요 지표 <span className="text-gray-300 dark:text-gray-600">→</span>
         </h2>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-1 xl:gap-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-2">
           {items.map((item) => (
             <IndicatorCard key={item.label} {...item} />
           ))}

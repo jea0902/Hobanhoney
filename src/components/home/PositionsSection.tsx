@@ -4,7 +4,7 @@ import PositionGrid from "./PositionGrid";
 export default function PositionsSection() {
   return (
     <section className="px-6 py-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl xl:max-w-none">
         <h2 className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-gray-100 sm:text-sm">
           <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
           실시간 포지션
