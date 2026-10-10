@@ -14,7 +14,7 @@ export default function AdminLoginPage({
         <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">관리자 로그인</h1>
         {searchParams.next === "/founder" && (
           <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
-            운영자 포지션은 관리자만 볼 수 있어.
+            운영자 포지션은 관리자만 열람 가능.
           </p>
         )}
         <input type="hidden" name="next" value={searchParams.next ?? ""} />
@@ -27,7 +27,7 @@ export default function AdminLoginPage({
           className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
         />
         {searchParams.error && (
-          <p className="text-xs font-medium text-red-500">비밀번호가 올바르지 않아요.</p>
+          <p className="text-xs font-medium text-red-500">비밀번호가 올바르지 않음.</p>
         )}
         <button
           type="submit"

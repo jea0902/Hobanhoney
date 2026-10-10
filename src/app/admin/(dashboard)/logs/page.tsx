@@ -46,7 +46,7 @@ export default async function LogsPage({ searchParams }: { searchParams: { page?
 
       {logs.length === 0 && (
         <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-          아직 기록된 로그가 없어요.
+          아직 기록된 로그 없음.
         </p>
       )}
 

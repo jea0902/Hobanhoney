@@ -23,7 +23,7 @@ export default function Footer() {
           ))}
         </nav>
         <p className="text-center leading-5 sm:text-left">
-          투자 권유 아님. 기록은 실제와 다를 수 있고, 투자 책임은 본인에게 있어.
+          투자 권유가 아님. 기록은 실제와 다를 수 있으며, 투자 책임은 본인에게 있음.
         </p>
         <div className="flex flex-col items-center justify-between gap-1 sm:flex-row">
           <span>Hoban-Honey / 인간지표</span>

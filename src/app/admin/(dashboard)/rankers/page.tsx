@@ -26,7 +26,7 @@ export default async function RankersAdminPage() {
       <div>
         <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">랭커 관리</h1>
         <p className="mt-1 text-xs text-gray-400">
-          지갑 주소만 등록하면 포지션은 하이퍼리퀴드에서 실시간으로 가져와요.
+          지갑 주소만 등록하면 포지션은 하이퍼리퀴드에서 실시간으로 가져옴.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default async function RankersAdminPage() {
 
       {rankers.length === 0 && (
         <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-          아직 등록된 랭커가 없어요.
+          아직 등록된 랭커 없음.
         </p>
       )}
 

@@ -11,19 +11,19 @@ function getLight(metCount: number) {
 }
 
 export default async function ContrarianSignal() {
-  const { bottom, top, accountRatio } = await getContrarianSignals();
+  const { bottom, top } = await getContrarianSignals();
   const bottomCount = countMet(bottom);
   const topCount = countMet(top);
 
   const summary =
     bottomCount >= SIGNAL_RULES.greenMin
-      ? "저점 신호 켜짐 — 개인들이 겁먹었을 때"
+      ? "저점 신호 켜짐 (개인 공포 과잉)"
       : topCount >= SIGNAL_RULES.greenMin
-        ? "고점 신호 켜짐 — 개인들이 들떴을 때"
+        ? "고점 신호 켜짐 (개인 탐욕 과잉)"
         : bottomCount >= SIGNAL_RULES.yellowMin
-          ? "저점 쪽으로 기울어지는 중"
+          ? "저점 쪽으로 기우는 중"
           : topCount >= SIGNAL_RULES.yellowMin
-            ? "고점 쪽으로 기울어지는 중"
+            ? "고점 쪽으로 기우는 중"
             : "중립";
 
   return (
@@ -55,12 +55,6 @@ export default async function ContrarianSignal() {
           dimmed={bottomCount > topCount}
         />
       </div>
-
-      <p className="mt-3 text-xs leading-5 text-gray-400">
-        {accountRatio &&
-          `Bybit 계정 수 기준 롱 ${(accountRatio.longRatio * 100).toFixed(0)}% · 숏 ${(accountRatio.shortRatio * 100).toFixed(0)}%. `}
-        4개 중 {SIGNAL_RULES.greenMin}개 이상이면 초록불. 바닥·꼭대기라는 뜻도, 투자 권유도 아니야.
-      </p>
     </div>
   );
 }

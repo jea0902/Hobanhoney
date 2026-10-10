@@ -3,15 +3,11 @@ import { getSupabase } from "@/lib/supabase";
 import { displaySymbol } from "@/lib/symbol";
 import { getUsdtKrwRate } from "@/lib/bithumb";
 import { getUnrealizedPnl, getReturnRatePercent } from "@/lib/positionMath";
-import {
-  countDirections,
-  getTraderGroups,
-  UNTRACKED_TRADERS,
-  withRepresentativePosition,
-} from "@/lib/traderGroups";
+import { countDirections, getTraderGroups, withRepresentativePosition } from "@/lib/traderGroups";
 import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
+import { getFounderTrader, traderHref } from "@/lib/founderTrader";
 
 const AVATAR_COLORS = ["bg-gray-400", "bg-gray-500", "bg-gray-600", "bg-gray-700", "bg-gray-800"];
 
@@ -81,11 +77,13 @@ export default async function PositionGrid() {
 
   const traders = getTraderGroups(positions);
 
-  // 운영자 포지션은 관리자 전용 페이지(/founder)에서만 보여주고 홈에는 넣지 않는다.
-  const [tradersWithMarkPrice, usdtKrwRate] = await Promise.all([
+  // 운영자 최무상은 유튜버와 같은 트레이더 한 명으로 맨 아래에 붙이고, 컨센서스에도 1표로 센다.
+  const [youtubers, founder, usdtKrwRate] = await Promise.all([
     withRepresentativePosition(traders),
+    getFounderTrader(),
     getUsdtKrwRate(),
   ]);
+  const tradersWithMarkPrice = [...youtubers, founder];
   const { longCount, shortCount } = countDirections(tradersWithMarkPrice);
 
   return (
@@ -187,10 +185,6 @@ function Avatar({ trader }: { trader: TraderGroup }) {
   );
 }
 
-function traderHref(traderName: string) {
-  return `/traders/${encodeURIComponent(traderName)}`;
-}
-
 function TraderCell({ trader }: { trader: TraderGroup }) {
   return (
     <td className="whitespace-nowrap px-4 py-3">
@@ -259,11 +253,7 @@ function TraderCard({
         </div>
       </div>
 
-      {!row && (
-        <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
-          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
-        </p>
-      )}
+      {!row && <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">포지션 없음</p>}
 
       {row?.type === "statement" && (
         <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
@@ -347,7 +337,7 @@ function TraderRow({
       <tr className="border-b border-gray-50 last:border-0 dark:border-gray-800">
         <TraderCell trader={trader} />
         <td colSpan={7} className="px-4 py-3 text-base text-gray-400 dark:text-gray-500">
-          {UNTRACKED_TRADERS[trader.traderName] ?? "포지션 없음"}
+          포지션 없음
         </td>
         <WinRateCell stats={trader.stats} />
         {elapsedCell}
@@ -399,9 +389,9 @@ function TraderRow({
         {returnRate === null ? "—" : formatPercent(returnRate)}
       </td>
       <td className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${returnColor}`}>
-        {pnl === null
-          ? "—"
-          : `${formatUsdt(pnl)} USDT${pnlKrw === null ? "" : ` (${formatKrw(pnlKrw)}원)`}`}
+        {/* 원화를 아래 줄로 내려야 70% 열 안에 표가 다 들어간다 */}
+        {pnl === null ? "—" : `${formatUsdt(pnl)} USDT`}
+        {pnlKrw !== null && <p className="text-xs font-semibold">{formatKrw(pnlKrw)}원</p>}
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-right text-base text-gray-700 dark:text-gray-300">
         {row.quantity} · {row.leverage}x

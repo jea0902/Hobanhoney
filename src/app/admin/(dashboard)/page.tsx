@@ -74,7 +74,7 @@ export default async function AdminPage() {
 
       {positions.length === 0 && (
         <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900">
-          아직 등록된 포지션이 없어요.
+          아직 등록된 포지션 없음.
         </p>
       )}
 

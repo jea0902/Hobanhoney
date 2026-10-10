@@ -18,14 +18,10 @@ export interface TraderGroup {
   stats: TraderStats;
 }
 
-// 자동 추적이 안 되는 트레이더. 남아 있는 "열린 포지션"은 마지막 수동 기록일 뿐 지금 상태가 아니라서,
-// 실시간 포지션·컨센서스·이달의 인간지표에선 빼고 종료된 기록과 승률만 보여준다.
-// 사또: 방송마다 커스텀 썸네일을 걸어서 라이브 썸네일에 실제 화면이 안 나옴 (2026-10-06, 에이전트 config.ts 참고)
-export const UNTRACKED_TRADERS: Record<string, string> = {
-  사또: "방송 화면을 볼 수 없어 자동 추적 중단",
-  // 자두두: 라이브 썸네일이 직접 만든 이미지라 처음부터 자동 추적 불가 (2026-10-09). 관리자가 수동으로 기록.
-  자두두: "방송 화면을 볼 수 없어 자동 추적 안 함",
-};
+// 자동 추적이 안 되는 트레이더는 사이트 어디에도 보이지 않게 숨긴다 (2026-10-11 사용자 결정, DB 기록은 보존).
+// 사또·자두두: 방송마다 직접 만든 썸네일이라 라이브 화면을 볼 수 없음. 용느: 추가 후 기록이 한 건도 없음.
+// 다시 보이게 하려면 여기서 이름을 빼면 된다.
+export const HIDDEN_TRADERS = ["사또", "자두두", "용느"];
 
 // 포지션 에이전트는 보이는 포지션을 전부 기록하므로, 트레이더마다 규모(수량 × 현재가)가 가장 큰
 // 열린 포지션 1개를 대표로 고른다. 홈 포지션 표·인간지표 컨센서스·역발상 신호등이 같은 기준을 쓴다.
@@ -33,7 +29,7 @@ export async function withRepresentativePosition(traders: TraderGroup[]) {
   return Promise.all(
     traders.map(async (trader) => {
       const openActualRows = trader.rows.filter((row) => !row.result && row.type === "actual");
-      if (openActualRows.length === 0 || UNTRACKED_TRADERS[trader.traderName]) {
+      if (openActualRows.length === 0) {
         return { trader, markPrice: null as number | null };
       }
 
@@ -67,7 +63,8 @@ export function getTraderStats(rows: PositionRow[], traderName: string): TraderS
 }
 
 // positions는 최신순(created_at desc) 정렬이어야 각 트레이더의 rows[0]가 최근 활동이 된다.
-export function getTraderGroups(positions: PositionRow[]): TraderGroup[] {
+export function getTraderGroups(allPositions: PositionRow[]): TraderGroup[] {
+  const positions = allPositions.filter((row) => !HIDDEN_TRADERS.includes(row.trader_name));
   const traderNames = [...new Set(positions.map((row) => row.trader_name))];
   return traderNames.map((traderName) => {
     const rows = positions.filter((row) => row.trader_name === traderName);
@@ -75,7 +72,7 @@ export function getTraderGroups(positions: PositionRow[]): TraderGroup[] {
       traderName,
       traderImage: rows[0]?.trader_image ?? null,
       rows,
-      openRow: UNTRACKED_TRADERS[traderName] ? null : (rows.find((row) => !row.result) ?? null),
+      openRow: rows.find((row) => !row.result) ?? null,
       stats: getTraderStats(positions, traderName),
     };
   });

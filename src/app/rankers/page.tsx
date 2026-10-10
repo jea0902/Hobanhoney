@@ -22,7 +22,7 @@ export default function RankersPage() {
             (2026.09.19 기준, 리더보드 PNL순)
           </p>
           <p className="mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
-            Hyperliquid는 모든 포지션이 블록체인에 공개돼서 실시간으로 볼 수 있어.{" "}
+            Hyperliquid는 모든 포지션이 블록체인에 공개되어 실시간으로 확인 가능.{" "}
             <Link href="/guides/liquidation-price" className="underline">
               강제청산가 보는 법
             </Link>
