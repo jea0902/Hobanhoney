@@ -76,7 +76,12 @@ export default async function FounderPage() {
           )}
 
           <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-gray-100">매매원칙</h2>
+            <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">매매원칙</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                - 리스크 관리는 의지가 아니라 구조적으로 설계
+              </p>
+            </div>
             <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-gray-700 dark:text-gray-300 sm:text-base">
               {TRADING_PRINCIPLES.map((principle) => (
                 <li key={principle}>{principle}</li>
