@@ -54,7 +54,7 @@ export default async function FounderPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
       <AutoRefresh intervalMs={10000} />
-      <Navbar active="founder" />
+      <Navbar />
 
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">

@@ -75,6 +75,7 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
               stroke={investedColor}
               strokeWidth={2}
               dot={false}
+              isAnimationActive={false}
             />
             <Line
               type="monotone"
@@ -82,6 +83,7 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
               stroke={equityColor}
               strokeWidth={2}
               dot={false}
+              isAnimationActive={false}
             />
           </LineChart>
         </ResponsiveContainer>

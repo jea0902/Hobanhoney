@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { aiImage, displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
+import { displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
+import AiName from "@/components/ai/AiName";
 import type { AiHolding } from "@/lib/aiInvestors";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
 
@@ -47,11 +48,6 @@ function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: 
   );
 }
 
-function AiAvatar({ id, name }: { id: string; name: string }) {
-  // eslint-disable-next-line @next/next/no-img-element -- public의 작은 정적 SVG라 next/image 최적화가 필요 없음
-  return <img src={aiImage(id)} alt={name} className="h-9 w-9 shrink-0 rounded-full" />;
-}
-
 export default async function AiTradersSection() {
   let summaries: Summary[] = [];
   try {
@@ -61,12 +57,14 @@ export default async function AiTradersSection() {
   }
 
   return (
-    <section className="px-6 py-10">
+    <section className="px-6 py-6">
       <div className="mx-auto max-w-6xl xl:max-w-none">
-        <h2 className="mb-4 flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-gray-100 sm:text-sm">
+        <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
           <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
           AI 트레이더
-          <span className="text-gray-400">(매일 오전 7시 30분 갱신)</span>
+          <span className="text-xs font-medium text-gray-400 sm:text-sm">
+            (매일 오전 7시 30분 갱신)
+          </span>
         </h2>
         <p className="-mt-2 mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
           정해진 전략대로만 매매하는 가상 투자자 (2026-03-06부터 매월 100만원 적립 가정)
@@ -84,12 +82,7 @@ export default async function AiTradersSection() {
                 className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <AiAvatar id={summary.meta.id} name={summary.meta.name} />
-                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                      {summary.meta.name}
-                    </p>
-                  </div>
+                  <AiName name={summary.meta.name} className="text-xl" />
                   <p className={`shrink-0 text-xl font-extrabold ${returnColor(rate)}`}>
                     {formatReturn(rate)}
                   </p>
@@ -135,11 +128,11 @@ export default async function AiTradersSection() {
                       className="border-b border-gray-50 last:border-0 dark:border-gray-800"
                     >
                       <td className="whitespace-nowrap px-4 py-3">
-                        <Link href={`/ai/${summary.meta.id}`} className="flex items-center gap-2">
-                          <AiAvatar id={summary.meta.id} name={summary.meta.name} />
-                          <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
-                            {summary.meta.name}
-                          </span>
+                        <Link
+                          href={`/ai/${summary.meta.id}`}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          <AiName name={summary.meta.name} className="text-lg" />
                         </Link>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-base">

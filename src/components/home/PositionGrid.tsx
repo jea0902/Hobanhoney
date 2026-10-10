@@ -398,9 +398,9 @@ function TraderRow({
         {returnRate === null ? "—" : formatPercent(returnRate)}
       </td>
       <td className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold ${returnColor}`}>
-        {pnl === null
-          ? "—"
-          : `${formatUsdt(pnl)} USDT${pnlKrw === null ? "" : ` (${formatKrw(pnlKrw)}원)`}`}
+        {/* 원화를 아래 줄로 내려야 70% 열 안에 표가 다 들어간다 */}
+        {pnl === null ? "—" : `${formatUsdt(pnl)} USDT`}
+        {pnlKrw !== null && <p className="text-xs font-semibold">{formatKrw(pnlKrw)}원</p>}
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-right text-base text-gray-700 dark:text-gray-300">
         {row.quantity} · {row.leverage}x
