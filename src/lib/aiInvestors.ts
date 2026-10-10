@@ -38,7 +38,7 @@ export const AI_TRADERS: AiMeta[] = [
   },
   {
     id: "fear_greed",
-    name: "AI 공포탐욕기계",
+    name: "AI 공포탐욕",
     summary: "현금을 모아 두었다가 공포 구간에서만 분할 매수",
     rules: [
       "평소에는 입금액을 현금(단기국채)으로 보유",
