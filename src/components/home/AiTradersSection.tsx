@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
+import { aiImage, displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
 import type { AiHolding } from "@/lib/aiInvestors";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
 
@@ -47,12 +47,9 @@ function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: 
   );
 }
 
-function AiAvatar() {
-  return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white">
-      AI
-    </div>
-  );
+function AiAvatar({ id, name }: { id: string; name: string }) {
+  // eslint-disable-next-line @next/next/no-img-element -- public의 작은 정적 SVG라 next/image 최적화가 필요 없음
+  return <img src={aiImage(id)} alt={name} className="h-9 w-9 shrink-0 rounded-full" />;
 }
 
 export default async function AiTradersSection() {
@@ -88,7 +85,7 @@ export default async function AiTradersSection() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <AiAvatar />
+                    <AiAvatar id={summary.meta.id} name={summary.meta.name} />
                     <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
                       {summary.meta.name}
                     </p>
@@ -139,7 +136,7 @@ export default async function AiTradersSection() {
                     >
                       <td className="whitespace-nowrap px-4 py-3">
                         <Link href={`/ai/${summary.meta.id}`} className="flex items-center gap-2">
-                          <AiAvatar />
+                          <AiAvatar id={summary.meta.id} name={summary.meta.name} />
                           <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
                             {summary.meta.name}
                           </span>

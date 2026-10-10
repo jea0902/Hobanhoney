@@ -7,7 +7,8 @@ import type { PositionRow } from "@/types/position";
 // 운영자 본인을 홈 실시간 포지션에 유튜버와 같은 트레이더 한 명으로 보여준다.
 // 데이터는 positions 테이블이 아니라 Bybit 실계좌(읽기 전용 API)와 closed_trades에서 온다.
 export const FOUNDER_TRADER_NAME = "최무상";
-export const FOUNDER_IMAGE = "/hodu-short.png";
+export const FOUNDER_IMAGE =
+  "https://tahdftbcqkxqkmclwytu.supabase.co/storage/v1/object/public/trader-images/choimoosang_logo.png";
 
 // 기존 트레이더 카드·표가 쓰는 PositionRow 형태로 바꾼다.
 function toPositionRow(position: OwnerPosition): PositionRow {

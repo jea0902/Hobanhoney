@@ -11,6 +11,11 @@ export interface AiMeta {
   note: string; // 계산 가정 (전략 아래에 작게 표시)
 }
 
+// 봇 로고는 public/ai/{id}.svg (AI마다 특징 소품 하나: 월가 넥타이, 한국개미 더듬이, 버핏 안경 등)
+export function aiImage(id: string) {
+  return `/ai/${id}.svg`;
+}
+
 const STOCK_NOTE =
   "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 모든 매수, 매도는 그날 종가로 체결했다고 가정함 " +
   "(배당은 배당락일에 반영, 매일 오전 7시 30분에 업데이트)";

@@ -6,6 +6,7 @@ import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import {
   AI_TRADERS,
+  aiImage,
   displayAiSymbol,
   getAiDetail,
   getMonthlyPerformance,
@@ -87,9 +88,13 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
         <section>
           <p className="text-xs font-semibold tracking-[0.2em] text-indigo-500">AI 트레이더</p>
-          <h1 className="mt-1 text-2xl font-extrabold text-gray-900 dark:text-gray-100">
-            {meta.name}
-          </h1>
+          <div className="mt-2 flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- public의 작은 정적 SVG라 next/image 최적화가 필요 없음 */}
+            <img src={aiImage(meta.id)} alt={meta.name} className="h-12 w-12 rounded-xl" />
+            <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
+              {meta.name}
+            </h1>
+          </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
