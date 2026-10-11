@@ -3,25 +3,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
-import { getSupabase } from "@/lib/supabase";
 import { getTraderStats, HIDDEN_TRADERS } from "@/lib/traderGroups";
 import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
+import { getTraderRows, mainOpenPosition, positionSentence } from "@/lib/traderSnapshot";
 import type { PositionRow, Direction } from "@/types/position";
 
 export const dynamic = "force-dynamic";
 
 const RESULT_LABEL = { win: "승", draw: "무", loss: "패" } as const;
-
-async function getTraderRows(name: string): Promise<PositionRow[]> {
-  const supabase = getSupabase();
-  const { data } = await supabase
-    .from("positions")
-    .select("*")
-    .eq("trader_name", name)
-    .order("created_at", { ascending: false });
-  return (data ?? []) as PositionRow[];
-}
 
 function formatKstDate(iso: string) {
   return new Date(iso).toLocaleString("ko-KR", {
@@ -64,9 +54,17 @@ export async function generateMetadata({
   params: { name: string };
 }): Promise<Metadata> {
   const name = decodeURIComponent(params.name);
+  // 사람들은 사이트 이름이 아니라 트레이더 이름으로 검색하므로 "이름 + 포지션" 검색어를 제목 앞에 둔다.
+  // 설명에는 지금 포지션을 넣어 검색 결과·공유 미리보기에서 바로 보이게 한다.
+  const open = mainOpenPosition(await getTraderRows(name));
+  const now = open ? `현재 ${positionSentence(open)}. ` : "";
+  const title = `${name} 실시간 포지션 · 롱/숏 · 진입가 · 청산가 | 호반꿀`;
+  const description = `${now}코인 유튜버 ${name}의 방송 속 실제 포지션을 실시간으로 추적함. 누적 승률, 롱·숏 성향, 전체 포지션 기록.`;
+  // openGraph를 따로 안 주면 카톡·SNS 미리보기에 레이아웃의 사이트 제목이 그대로 나온다.
   return {
-    title: `${name} 포지션 기록과 승률 | 호반꿀`,
-    description: `유튜버 트레이더 ${name}의 실제 포지션 기록, 누적 승률, 롱·숏 성향, 자주 거래한 종목.`,
+    title,
+    description,
+    openGraph: { title, description, siteName: "호반꿀", locale: "ko_KR", type: "website" },
   };
 }
 
@@ -92,6 +90,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
   const firstRecordedAt = rows[rows.length - 1].created_at;
   const image = rows.find((row) => row.trader_image)?.trader_image ?? null;
   const mainDirection = long.count >= short.count ? "롱" : "숏";
+  const open = mainOpenPosition(rows);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
@@ -106,7 +105,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
             )}
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
-                {name} 포지션 기록
+                {name} 실시간 포지션
               </h1>
               <p className="mt-1 text-sm text-gray-400">
                 {`${formatKstDate(firstRecordedAt)}부터 추적 중`}
@@ -116,6 +115,17 @@ export default async function TraderPage({ params }: { params: { name: string } 
 
           {/* 트레이더마다 다른 요약 문장 — 숫자 표만 있는 페이지보다 읽을 거리를 준다 */}
           <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 text-[15px] leading-7 text-gray-700 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
+            {/* 검색엔진은 표보다 문장을 잘 읽고, 이 문장이 자주 바뀌어 "갱신되는 페이지"로 보인다 */}
+            <p className="mb-2">
+              {open ? (
+                <>
+                  {name} 현재 포지션: <strong>{positionSentence(open)}</strong> (
+                  {formatKstDate(open.created_at)} 진입 기록).
+                </>
+              ) : (
+                <>{name} 현재 열린 포지션 없음.</>
+              )}
+            </p>
             <p>
               총 <strong>{rows.length}건</strong>.
               {stats.total > 0 ? (

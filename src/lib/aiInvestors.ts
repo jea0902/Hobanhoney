@@ -9,6 +9,7 @@ export interface AiMeta {
   summary: string;
   rules: string[];
   note: string; // 계산 가정 (전략 아래에 작게 표시)
+  seoTitle?: string; // 검색 결과 제목. 사람들이 실제로 검색할 말(원래 트레이더 이름 등)을 앞에 둔다
 }
 
 const STOCK_NOTE =
@@ -20,6 +21,7 @@ export const AI_TRADERS: AiMeta[] = [
   {
     id: "wonyotti",
     name: "AI 워뇨띠",
+    seoTitle: "워뇨띠 매매 기록 분석 · AI 워뇨띠 실시간 포지션 | 호반꿀",
     summary: "워뇨띠의 실제 매매 습관을 닮게 만든 BTC·ETH 단타",
     rules: [
       "24시간 변동폭이 평소보다 클 때만 진입 (BTC는 최근 30일 중간값 이상, ETH는 상위 25%)",
@@ -35,6 +37,7 @@ export const AI_TRADERS: AiMeta[] = [
   {
     id: "hobanhoney",
     name: "AI 호반꿀",
+    seoTitle: "박호두 반대로 하면? AI 호반꿀 실시간 포지션과 수익률 | 호반꿀",
     summary: "인간지표 박호두의 반대 포지션",
     rules: [
       "박호두와 같은 종목·레버리지·진입가로 반대 포지션, 박호두 종료 시 함께 종료",
