@@ -1,3 +1,4 @@
+import Link from "next/link";
 import WonyottiBalanceChart from "@/components/ai/WonyottiBalanceChart";
 import record from "@/lib/wonyottiRecord.json";
 
@@ -50,7 +51,11 @@ export default function WonyottiRecord() {
         </h2>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           BitMEX 계정(aoa)의 체결 {habits.fills.toLocaleString()}건과 지갑 기록을 분석함. 손익은 BTC
-          기준이며, 포지션 분석은 거래의 대부분을 차지한 BTC 무기한(XBTUSD) 기준임.
+          기준이며, 포지션 분석은 거래의 대부분을 차지한 BTC 무기한(XBTUSD) 기준임. 자세한 분석은{" "}
+          <Link href="/guides/wonyotti-trading-record" className="underline">
+            워뇨띠 매매법 분석
+          </Link>{" "}
+          글 참고.
         </p>
       </div>
 

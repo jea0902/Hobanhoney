@@ -23,9 +23,13 @@ export const dynamic = "force-dynamic";
 export function generateMetadata({ params }: { params: { id: string } }): Metadata {
   const meta = AI_TRADERS.find((ai) => ai.id === params.id);
   if (!meta) return {};
+  const title = meta.seoTitle ?? `${meta.name} 전략과 포지션 | 호반꿀`;
+  const description = `${meta.name}: ${meta.summary}. 전략 규칙, 보유 종목, 월별 성과, 매매 기록.`;
+  // openGraph를 따로 안 주면 카톡·SNS 미리보기에 레이아웃의 사이트 제목이 그대로 나온다.
   return {
-    title: `${meta.name} 전략과 포지션 | 호반꿀`,
-    description: `${meta.name}: ${meta.summary}. 전략 규칙, 보유 종목, 월별 성과, 매매 기록.`,
+    title,
+    description,
+    openGraph: { title, description, siteName: "호반꿀", locale: "ko_KR", type: "website" },
   };
 }
 

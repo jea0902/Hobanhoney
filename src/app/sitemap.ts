@@ -28,6 +28,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     })),
     { url: `${siteUrl}/guides`, changeFrequency: "weekly", priority: 0.6 },
+    {
+      url: `${siteUrl}/guides/wonyotti-trading-record`,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
     { url: `${siteUrl}/guides/human-indicator`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${siteUrl}/guides/liquidation-price`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${siteUrl}/guides/fear-greed-index`, changeFrequency: "monthly", priority: 0.6 },
