@@ -168,7 +168,7 @@ alter table ai_fundamentals enable row level security;
 -- 결과: AI별 매매 기록. 주식은 그날 종가, AI 호반꿀은 박호두 진입·종료 가격으로 체결.
 create table if not exists ai_trades (
   id bigint generated always as identity primary key,
-  ai text not null, -- 'wallstreet' | 'korean_ant' | 'fear_greed' | 'buffett' | 'burry' | 'hobanhoney'
+  ai text not null, -- 'wallstreet' | 'korean_ant' | 'fear_greed' | 'buffett' | 'burry' | 'hobanhoney' | 'wonyotti'
   traded_at timestamptz not null,
   symbol text not null,
   side text not null check (side in ('buy', 'sell', 'short', 'cover')),

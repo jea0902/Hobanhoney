@@ -16,7 +16,7 @@ import {
 import { getTraderPositions, logEvent } from "./db.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import type { Market } from "./market.ts";
-import { fetchMinuteCandles } from "./sources.ts";
+import { fetchCandles } from "./sources.ts";
 import type { Candle } from "./sources.ts";
 
 const KST_OFFSET_MS = 9 * 3_600_000;
@@ -63,11 +63,7 @@ async function loadFollowed(now: number) {
 
     const openedAt = Date.parse(row.created_at);
     const closedAt = isOpen ? null : Date.parse(row.result_recorded_at!);
-    const candles = await fetchMinuteCandles(
-      row.symbol.replace("/", ""),
-      openedAt,
-      closedAt ?? now,
-    );
+    const candles = await fetchCandles(row.symbol.replace("/", ""), openedAt, closedAt ?? now);
     if (!candles) {
       // 강제청산 여부를 판정할 수 없으면 따라 하지 않는다.
       await logEvent(

@@ -5,6 +5,7 @@ import Footer from "@/components/home/Footer";
 import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import AiName from "@/components/ai/AiName";
+import WonyottiRecord from "@/components/ai/WonyottiRecord";
 import {
   AI_TRADERS,
   annualReturnPercent,
@@ -43,7 +44,7 @@ function formatQuantity(n: number) {
   return Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 4 });
 }
 
-// 주식은 종가 기준이라 날짜만, AI 호반꿀은 박호두 진입·종료 시각까지 보여준다.
+// 주식은 종가 기준이라 날짜만, 선물 AI(호반꿀·워뇨띠)는 진입·종료 시각까지 보여준다.
 function formatTradeTime(iso: string, withTime: boolean) {
   if (!withTime) return iso.slice(0, 10);
   return new Date(iso).toLocaleString("ko-KR", {
@@ -71,7 +72,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
   const detail = await getAiDetail(params.id);
   if (!detail) notFound();
   const { meta, equity, holdings, trades } = detail;
-  const isFutures = meta.id === "hobanhoney";
+  const isFutures = meta.id === "hobanhoney" || meta.id === "wonyotti";
 
   const latest = equity.at(-1);
   const returnPercent = latest ? annualReturnPercent(latest, lastYearEndOf(equity, latest)) : null;
@@ -118,6 +119,8 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
           </ul>
           <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">{meta.note}</p>
         </section>
+
+        {meta.id === "wonyotti" && <WonyottiRecord />}
 
         <section>
           <h2 className="mb-3 text-sm font-bold text-gray-900 dark:text-gray-100">자산 추이</h2>

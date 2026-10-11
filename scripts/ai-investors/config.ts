@@ -20,6 +20,7 @@ export const AI_IDS = [
   "buffett",
   "burry",
   "hobanhoney",
+  "wonyotti",
 ] as const;
 export type AiId = (typeof AI_IDS)[number];
 
@@ -42,4 +43,6 @@ export const HOBANHONEY_MAX_LIQUIDATIONS = 2; // 연속 강제청산이 이만�
 export const HOBANHONEY_BAN_DAYS = 7; // 이 기간 매매 금지
 // Bybit 테이커 수수료와 BTC 기준 유지증거금률. 펀딩비는 계산하지 않는다.
 export const FUTURES_FEE = 0.00055;
+// Bybit 메이커 수수료. AI 워뇨띠의 지정가 체결(진입·물타기·익절)에 쓴다.
+export const MAKER_FEE = 0.0002;
 export const MAINTENANCE_MARGIN = 0.005;

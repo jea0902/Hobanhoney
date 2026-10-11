@@ -1,0 +1,421 @@
+{
+  "period": {
+    "from": "2018-03-05",
+    "to": "2021-12-24"
+  },
+  "totals": {
+    "deposits": 14.5,
+    "realizedPnl": 3537,
+    "withdrawals": 2815,
+    "endBalance": 737
+  },
+  "monthly": [
+    {
+      "month": "2018-03",
+      "balance": 2.4,
+      "withdrawn": 2.4
+    },
+    {
+      "month": "2018-04",
+      "balance": 4.1,
+      "withdrawn": 5.9
+    },
+    {
+      "month": "2018-05",
+      "balance": 7.7,
+      "withdrawn": 7.9
+    },
+    {
+      "month": "2018-06",
+      "balance": 13.5,
+      "withdrawn": 7.9
+    },
+    {
+      "month": "2018-07",
+      "balance": 24.8,
+      "withdrawn": 11.9
+    },
+    {
+      "month": "2018-08",
+      "balance": 29.7,
+      "withdrawn": 14.9
+    },
+    {
+      "month": "2018-09",
+      "balance": 5.5,
+      "withdrawn": 21.9
+    },
+    {
+      "month": "2018-10",
+      "balance": 18.2,
+      "withdrawn": 21.9
+    },
+    {
+      "month": "2018-11",
+      "balance": 80,
+      "withdrawn": 42.9
+    },
+    {
+      "month": "2018-12",
+      "balance": 120,
+      "withdrawn": 83
+    },
+    {
+      "month": "2019-01",
+      "balance": 167.5,
+      "withdrawn": 103
+    },
+    {
+      "month": "2019-02",
+      "balance": 166.9,
+      "withdrawn": 123
+    },
+    {
+      "month": "2019-03",
+      "balance": 192.1,
+      "withdrawn": 131
+    },
+    {
+      "month": "2019-04",
+      "balance": 174,
+      "withdrawn": 181
+    },
+    {
+      "month": "2019-05",
+      "balance": 174,
+      "withdrawn": 241.1
+    },
+    {
+      "month": "2019-06",
+      "balance": 170.1,
+      "withdrawn": 281.1
+    },
+    {
+      "month": "2019-07",
+      "balance": 177.6,
+      "withdrawn": 321.1
+    },
+    {
+      "month": "2019-08",
+      "balance": 216.6,
+      "withdrawn": 321.1
+    },
+    {
+      "month": "2019-09",
+      "balance": 223.6,
+      "withdrawn": 341.1
+    },
+    {
+      "month": "2019-10",
+      "balance": 214.7,
+      "withdrawn": 341.1
+    },
+    {
+      "month": "2019-11",
+      "balance": 308.9,
+      "withdrawn": 341.1
+    },
+    {
+      "month": "2019-12",
+      "balance": 377.2,
+      "withdrawn": 342.1
+    },
+    {
+      "month": "2020-01",
+      "balance": 429.9,
+      "withdrawn": 442.2
+    },
+    {
+      "month": "2020-02",
+      "balance": 417.6,
+      "withdrawn": 492.2
+    },
+    {
+      "month": "2020-03",
+      "balance": 616.9,
+      "withdrawn": 592.2
+    },
+    {
+      "month": "2020-04",
+      "balance": 566.1,
+      "withdrawn": 592.2
+    },
+    {
+      "month": "2020-05",
+      "balance": 537.9,
+      "withdrawn": 692.2
+    },
+    {
+      "month": "2020-06",
+      "balance": 585,
+      "withdrawn": 692.2
+    },
+    {
+      "month": "2020-07",
+      "balance": 599.4,
+      "withdrawn": 692.2
+    },
+    {
+      "month": "2020-08",
+      "balance": 581.5,
+      "withdrawn": 864.3
+    },
+    {
+      "month": "2020-09",
+      "balance": 683,
+      "withdrawn": 864.3
+    },
+    {
+      "month": "2020-10",
+      "balance": 602.5,
+      "withdrawn": 914.3
+    },
+    {
+      "month": "2020-11",
+      "balance": 637.1,
+      "withdrawn": 914.3
+    },
+    {
+      "month": "2020-12",
+      "balance": 518.6,
+      "withdrawn": 964.3
+    },
+    {
+      "month": "2021-01",
+      "balance": 734.2,
+      "withdrawn": 1064.3
+    },
+    {
+      "month": "2021-02",
+      "balance": 704.3,
+      "withdrawn": 1064.3
+    },
+    {
+      "month": "2021-03",
+      "balance": 696.8,
+      "withdrawn": 1114.3
+    },
+    {
+      "month": "2021-04",
+      "balance": 713,
+      "withdrawn": 1214.3
+    },
+    {
+      "month": "2021-05",
+      "balance": 795.6,
+      "withdrawn": 1214.3
+    },
+    {
+      "month": "2021-06",
+      "balance": 1139.9,
+      "withdrawn": 1514.3
+    },
+    {
+      "month": "2021-07",
+      "balance": 987.5,
+      "withdrawn": 1814.4
+    },
+    {
+      "month": "2021-08",
+      "balance": 1213.3,
+      "withdrawn": 2214.4
+    },
+    {
+      "month": "2021-09",
+      "balance": 1304.9,
+      "withdrawn": 2814.5
+    },
+    {
+      "month": "2021-10",
+      "balance": 1089.2,
+      "withdrawn": 2814.5
+    },
+    {
+      "month": "2021-11",
+      "balance": 892.5,
+      "withdrawn": 2814.5
+    },
+    {
+      "month": "2021-12",
+      "balance": 737.3,
+      "withdrawn": 2814.5
+    }
+  ],
+  "yearly": [
+    {
+      "year": "2018",
+      "pnl": 188.4,
+      "withdrawn": 83
+    },
+    {
+      "year": "2019",
+      "pnl": 516.4,
+      "withdrawn": 259.2
+    },
+    {
+      "year": "2020",
+      "pnl": 763.6,
+      "withdrawn": 622.1
+    },
+    {
+      "year": "2021",
+      "pnl": 2068.9,
+      "withdrawn": 1850.3
+    }
+  ],
+  "bySymbol": [
+    {
+      "symbol": "BTCUSD",
+      "pnl": 2007.1
+    },
+    {
+      "symbol": "ETHUSD",
+      "pnl": 830.4
+    },
+    {
+      "symbol": "BTC 분기선물",
+      "pnl": 374.7
+    },
+    {
+      "symbol": "XRPUSD",
+      "pnl": 173.9
+    },
+    {
+      "symbol": "ETHUSD 분기선물",
+      "pnl": 140.9
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "pnl": 52.6
+    },
+    {
+      "symbol": "BNBUSDT",
+      "pnl": 19.2
+    },
+    {
+      "symbol": "LTCUSD",
+      "pnl": 16.9
+    }
+  ],
+  "habits": {
+    "fills": 1439207,
+    "limitShare": 99.4,
+    "makerShare": 67,
+    "positions": 2589,
+    "longShare": 49,
+    "winRate": 76,
+    "avgWin": 2.85,
+    "avgLoss": 5.73,
+    "medianHoldMinutes": 26,
+    "medianWinMove": 0.37,
+    "addedShare": 54,
+    "stopPositions": 40,
+    "liquidationPositions": 19,
+    "top1Count": 26,
+    "top1Share": 101
+  },
+  "holdBuckets": [
+    {
+      "label": "1시간 미만",
+      "count": 1561,
+      "pnl": 247.8,
+      "winRate": 79,
+      "medianBtc": 21.2
+    },
+    {
+      "label": "1~24시간",
+      "count": 770,
+      "pnl": 792.1,
+      "winRate": 74,
+      "medianBtc": 129.1
+    },
+    {
+      "label": "1~7일",
+      "count": 220,
+      "pnl": 787.2,
+      "winRate": 62,
+      "medianBtc": 470.2
+    },
+    {
+      "label": "7일 이상",
+      "count": 38,
+      "pnl": 158.4,
+      "winRate": 63,
+      "medianBtc": 795.9
+    }
+  ],
+  "bestTrades": [
+    {
+      "date": "2021-06-01",
+      "direction": "숏",
+      "pnl": 231.7,
+      "hours": 169,
+      "maxBtc": 1591
+    },
+    {
+      "date": "2021-08-18",
+      "direction": "롱",
+      "pnl": 180.2,
+      "hours": 469,
+      "maxBtc": 1568
+    },
+    {
+      "date": "2020-08-30",
+      "direction": "숏",
+      "pnl": 144.4,
+      "hours": 103,
+      "maxBtc": 2091
+    },
+    {
+      "date": "2021-03-01",
+      "direction": "숏",
+      "pnl": 134.9,
+      "hours": 1295,
+      "maxBtc": 1458
+    },
+    {
+      "date": "2021-06-13",
+      "direction": "숏",
+      "pnl": 105.2,
+      "hours": 114,
+      "maxBtc": 1768
+    }
+  ],
+  "worstTrades": [
+    {
+      "date": "2021-09-27",
+      "direction": "숏",
+      "pnl": -195.6,
+      "hours": 607,
+      "maxBtc": 1117
+    },
+    {
+      "date": "2021-01-29",
+      "direction": "숏",
+      "pnl": -193.9,
+      "hours": 374,
+      "maxBtc": 1349
+    },
+    {
+      "date": "2021-11-09",
+      "direction": "롱",
+      "pnl": -186.3,
+      "hours": 1067,
+      "maxBtc": 1223
+    },
+    {
+      "date": "2021-05-19",
+      "direction": "롱",
+      "pnl": -172.4,
+      "hours": 12,
+      "maxBtc": 1012
+    },
+    {
+      "date": "2021-06-08",
+      "direction": "숏",
+      "pnl": -147.5,
+      "hours": 79,
+      "maxBtc": 1874
+    }
+  ]
+}
