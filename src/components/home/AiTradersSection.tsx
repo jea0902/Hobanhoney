@@ -46,7 +46,7 @@ function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: 
   );
 }
 
-// 크기별 스타일. 맨 위 AI 워뇨띠와 AI 호반꿀은 같은 크기로 살짝 크게(색만 다름), 나머지는 작은 카드.
+// 크기별 스타일. 맨 위 AI 워뇨띠와 AI 호반꿀은 한 줄에 반반, 살짝 크게(색만 다름). 나머지는 작은 카드.
 const STYLES: Record<
   CardSize,
   { card: string; emblem: "md" | "sm"; name: string; rate: string; chart: string }
@@ -157,10 +157,13 @@ export default async function AiTradersSection() {
         </p>
 
         <div className="flex flex-col gap-3">
-          {featured && (
-            <AiCard summary={featured} size="featured" tier={tiers.get(featured.meta.id)!} />
-          )}
-          {second && <AiCard summary={second} size="large" tier={tiers.get(second.meta.id)!} />}
+          {/* 워뇨띠·호반꿀은 한 줄에 반반 (모바일은 위아래) */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {featured && (
+              <AiCard summary={featured} size="featured" tier={tiers.get(featured.meta.id)!} />
+            )}
+            {second && <AiCard summary={second} size="large" tier={tiers.get(second.meta.id)!} />}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {rest.map((summary) => (
               <AiCard
