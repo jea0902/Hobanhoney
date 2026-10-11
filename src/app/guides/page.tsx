@@ -4,10 +4,15 @@ import ContentPage from "@/components/ContentPage";
 
 export const metadata: Metadata = {
   title: "가이드 | 호반꿀",
-  description: "인간지표, 강제청산가, 공포탐욕지수 기초 가이드.",
+  description: "워뇨띠 매매 기록 분석, 인간지표, 강제청산가, 공포탐욕지수 가이드.",
 };
 
 const GUIDES = [
+  {
+    href: "/guides/wonyotti-trading-record",
+    title: "워뇨띠 매매법 분석",
+    summary: "4년 체결 기록 144만 건으로 본 승률과 수익 구조",
+  },
   {
     href: "/guides/human-indicator",
     title: "인간지표란?",
