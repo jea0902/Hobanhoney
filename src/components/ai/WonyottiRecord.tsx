@@ -37,7 +37,7 @@ export default function WonyottiRecord() {
     ["평균 이익 / 평균 손실", `${formatBtc(habits.avgWin, 2)} / ${formatBtc(habits.avgLoss, 2)}`],
     ["보유 시간 중간값", `${habits.medianHoldMinutes}분`],
     ["이긴 포지션의 가격 움직임 중간값", `${habits.medianWinMove}%`],
-    ["물타기·불타기한 포지션", `${habits.addedShare}%`],
+    ["추가 진입한 포지션 (주로 물량 나눠 채우기)", `${habits.addedShare}%`],
     ["스탑 주문이 체결된 포지션", `${habits.stopPositions}개 (손절은 대부분 직접 지정가로)`],
     ["강제청산된 포지션", `${habits.liquidationPositions}개 (모두 2018년)`],
   ];
@@ -67,7 +67,9 @@ export default function WonyottiRecord() {
         </h3>
         <ul className="mt-3 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-6 text-gray-700 dark:text-gray-300">
           <li>
-            AI 워뇨띠는 위 기록에서 승률·익절 폭·물타기·보유 시간 같은 매매 습관을 뽑아 만든 규칙임.
+            AI 워뇨띠는 위 기록에서 뽑은 단타 습관(진입 위치·익절 폭·보유 시간)에, 본인이 100문
+            100답에서 밝힌 원칙(상승장에선 자산 30%를 비트로, 거래량이 적으면 쉬기, 2분할 진입)을
+            더한 규칙임.
           </li>
           <li>
             워뇨띠 수익의 핵심인 &ldquo;언제 크게 실을지 고르는 판단&rdquo;은 구현하지 못함. 이익
@@ -76,8 +78,9 @@ export default function WonyottiRecord() {
           </li>
           <li>호가창을 보며 지정가로 나눠 사고파는 판단도 1시간봉 규칙으로는 재현할 수 없음.</li>
           <li>
-            같은 규칙을 과거 시세로 시험한 결과도 손실이었음 (레버리지 2배 기준 2018~2021년 연 -32%,
-            2022~2026년 연 -12%). 습관만으로는 수익이 나지 않는다는 비교 대상으로 운영함.
+            과거 시세로 시험하면 단타 습관만으로는 손실(2018~2021년 연 -20%, 2022~2026년 연 -4.5%),
+            본인 원칙을 더하면 플러스(연 +23%, 연 +7.8%)였음. 다만 수익 대부분은 상승장의 BTC 30%
+            기본 포지션에서 나오고, 단타는 본전 수준임.
           </li>
         </ul>
       </div>

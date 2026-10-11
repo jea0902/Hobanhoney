@@ -244,6 +244,7 @@ export interface Candle {
   high: number;
   low: number;
   close: number;
+  volume: number; // AI 워뇨띠 거래량 조건용
 }
 
 // GitHub Actions에서 Bybit을 직접 부르면 전부 실패해서(2026-10-11) 우리 사이트(/api/bybit-kline)를 거친다.
@@ -286,12 +287,13 @@ export async function fetchCandles(
     const end = Math.min(start + 999 * step, toMs);
     const list = await fetchKlinePage(symbol, start, end, minutes);
     if (!list) return null;
-    for (const [time, , high, low, close] of list) {
+    for (const [time, , high, low, close, volume] of list) {
       candles.push({
         time: Number(time),
         high: Number(high),
         low: Number(low),
         close: Number(close),
+        volume: Number(volume),
       });
     }
     await sleep(100);
