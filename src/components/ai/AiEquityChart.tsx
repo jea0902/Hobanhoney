@@ -34,7 +34,10 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
     date: `${row.date.slice(2, 4)}.${row.date.slice(5, 7)}.${row.date.slice(8, 10)}`,
     equity: row.equity,
     invested: row.invested,
+    withdrawn: row.withdrawn,
   }));
+  // 출금하는 AI(워뇨띠)만 누적 출금 선을 그린다 — 총자산이 줄어든 게 손실이 아니라 챙긴 돈임을 보여준다
+  const hasWithdrawals = equity.some((row) => row.withdrawn > 0);
   const tickColor = isDark ? "#6B7280" : "#9CA3AF";
   const equityColor = isDark ? "#60A5FA" : "#3182F6";
   const investedColor = isDark ? "#4B5563" : "#D1D5DB";
@@ -66,7 +69,7 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
               }
               formatter={(value, name) => [
                 `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
-                name === "equity" ? "총자산" : "누적 입금",
+                name === "equity" ? "총자산" : name === "invested" ? "누적 입금" : "누적 출금",
               ]}
             />
             <Line
@@ -77,6 +80,16 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
               dot={false}
               isAnimationActive={false}
             />
+            {hasWithdrawals && (
+              <Line
+                type="stepAfter"
+                dataKey="withdrawn"
+                stroke="#F59E0B"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
             <Line
               type="monotone"
               dataKey="equity"
@@ -95,6 +108,11 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
         <span className="flex items-center gap-1">
           <span className="h-0.5 w-3 bg-gray-300 dark:bg-gray-600" /> 누적 입금
         </span>
+        {hasWithdrawals && (
+          <span className="flex items-center gap-1">
+            <span className="h-0.5 w-3 bg-amber-500" /> 누적 출금
+          </span>
+        )}
       </div>
     </div>
   );

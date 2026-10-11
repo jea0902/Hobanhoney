@@ -37,6 +37,10 @@ export const KNOWN_CIKS: Record<string, string> = {
 // ---- AI 워뇨띠 ----
 // 다른 AI는 매월 100만원 적립이지만, 워뇨띠는 "600만원으로 시작했다"는 유명한 이야기대로 시작일에 한 번만 넣는다 (사용자 결정).
 export const WONYOTTI_START_KRW = 6_000_000;
+// 출금 습관 (2018~2021 지갑 기록 56회): 계좌가 커진 뒤엔 약 한 달 간격, 잔고 고점 근처에서, 직전 출금 뒤 이익의 중간값 약 60%.
+// 2018년 11월 이후엔 추가 입금이 없었고 본인도 "추가 입금은 지양"(100문 100답 Q32)이라 입금은 시작 600만원 한 번뿐.
+export const WONYOTTI_WITHDRAW_PROFIT_RATIO = 0.6;
+export const WONYOTTI_WITHDRAW_NEAR_PEAK = 0.95;
 
 // ---- AI 호반꿀 (박호두 반대매매) ----
 export const HOBANHONEY_TARGET = "박호두";
