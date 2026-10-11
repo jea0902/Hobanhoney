@@ -246,13 +246,28 @@ export interface Candle {
   close: number;
 }
 
-async function fetchKlinePage(url: string) {
+// GitHub Actions에서 Bybit을 직접 부르면 전부 실패해서(2026-10-11) 우리 사이트(/api/bybit-kline)를 거친다.
+async function fetchKlinePage(symbol: string, start: number, end: number) {
+  const url = `${process.env.SITE_URL}/api/bybit-kline?symbol=${symbol}&start=${start}&end=${end}`;
+  let failure = "";
   // 연달아 부르면 가끔 일시적으로 거절돼서(2026-10-11 ZEC·SPCX) 세 번까지 다시 시도한다.
   for (let attempt = 0; attempt < 3; attempt++) {
-    const json = await (await fetch(url)).json().catch(() => null);
-    if (json?.retCode === 0) return json.result.list as string[][];
+    failure = "";
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+      });
+      const text = await res.text();
+      failure = `${res.status} ${text.slice(0, 200)}`;
+      const json = JSON.parse(text);
+      if (json.retCode === 0) return json.result.list as string[][];
+    } catch (error) {
+      failure = `${failure} ${error}`.trim();
+    }
     await sleep(1000 * (attempt + 1));
   }
+  // 원인을 알 수 있게 마지막 실패 응답을 남긴다 (GitHub Actions 로그에 보임).
+  console.log(`[bybit-kline] ${symbol} ${start} 실패: ${failure}`);
   return null;
 }
 
@@ -265,10 +280,7 @@ export async function fetchMinuteCandles(
   const candles: Candle[] = [];
   for (let start = fromMs; start <= toMs; start += 1000 * 60_000) {
     const end = Math.min(start + 999 * 60_000, toMs);
-    const list = await fetchKlinePage(
-      `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}` +
-        `&interval=1&start=${start}&end=${end}&limit=1000`,
-    );
+    const list = await fetchKlinePage(symbol, start, end);
     if (!list) return null;
     for (const [time, , high, low, close] of list) {
       candles.push({

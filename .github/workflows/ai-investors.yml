@@ -24,3 +24,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+          # AI 호반꿀 1분봉을 우리 사이트(/api/bybit-kline)를 거쳐 받는다
+          SITE_URL: https://hobanhoney.win
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
