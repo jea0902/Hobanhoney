@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { displayAiSymbol, getAiSummaries, largestHolding } from "@/lib/aiInvestors";
-import AiAvatar from "@/components/ai/AiAvatar";
+import { assignTiers, TierEmblem } from "@/components/ai/AiTier";
+import type { Tier } from "@/components/ai/AiTier";
 import AiName from "@/components/ai/AiName";
 import Sparkline from "@/components/ai/Sparkline";
 import type { AiHolding } from "@/lib/aiInvestors";
@@ -24,7 +25,8 @@ function formatReturn(n: number | null) {
 
 // 대표 종목: 종목, 롱/숏(레버리지), 총자산 대비 비중
 function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: number }) {
-  if (!holding) return <span className="text-gray-400 dark:text-gray-500">현금만 보유</span>;
+  if (!holding)
+    return <span className="text-gray-500 dark:text-gray-400">현재는 현금 보유하고 관망 중</span>;
   const isShort = holding.quantity < 0;
   return (
     <span>
@@ -44,35 +46,35 @@ function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: 
   );
 }
 
-// 크기별 스타일. 맨 위 AI 워뇨띠가 가장 크고, AI 호반꿀은 살짝 크게, 나머지는 작은 카드.
+// 크기별 스타일. 맨 위 AI 워뇨띠와 AI 호반꿀은 같은 크기로 살짝 크게(색만 다름), 나머지는 작은 카드.
 const STYLES: Record<
   CardSize,
-  { card: string; avatar: "lg" | "md" | "sm"; name: string; rate: string; chart: string }
+  { card: string; emblem: "md" | "sm"; name: string; rate: string; chart: string }
 > = {
   featured: {
-    card: "p-5 sm:p-6 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-white dark:border-amber-900/60 dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900",
-    avatar: "lg",
-    name: "text-2xl sm:text-3xl",
-    rate: "text-3xl sm:text-4xl",
-    chart: "h-16",
+    card: "p-4 sm:p-5 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-white dark:border-amber-900/60 dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900",
+    emblem: "md",
+    name: "text-xl sm:text-2xl",
+    rate: "text-2xl sm:text-3xl",
+    chart: "h-12",
   },
   large: {
     card: "p-4 sm:p-5 border-yellow-200 bg-gradient-to-br from-yellow-50/70 via-white to-white dark:border-yellow-900/50 dark:from-yellow-950/20 dark:via-gray-900 dark:to-gray-900",
-    avatar: "md",
+    emblem: "md",
     name: "text-xl sm:text-2xl",
     rate: "text-2xl sm:text-3xl",
     chart: "h-12",
   },
   small: {
     card: "p-4 border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-900",
-    avatar: "sm",
+    emblem: "sm",
     name: "text-lg",
     rate: "text-xl",
     chart: "h-10",
   },
 };
 
-function AiCard({ summary, size }: { summary: Summary; size: CardSize }) {
+function AiCard({ summary, size, tier }: { summary: Summary; size: CardSize; tier: Tier }) {
   const style = STYLES[size];
   const { meta, latest, annualReturn, holdings, returnSeries } = summary;
   const equity = latest?.equity ?? 0;
@@ -84,7 +86,7 @@ function AiCard({ summary, size }: { summary: Summary; size: CardSize }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <AiAvatar id={meta.id} size={style.avatar} />
+          <TierEmblem tier={tier} size={style.emblem} />
           <div className="min-w-0">
             <AiName name={meta.name} className={`${style.name} group-hover:underline`} />
             <p
@@ -134,6 +136,10 @@ export default async function AiTradersSection() {
   }
   // AI_TRADERS 순서대로: 첫 번째(워뇨띠)는 가장 크게, 두 번째(호반꿀)는 살짝 크게, 나머지는 작은 카드
   const [featured, second, ...rest] = summaries;
+  // 올해 수익률 순위로 티어 (챌린저 ~ 브론즈)
+  const tiers = assignTiers(
+    summaries.map((s) => ({ id: s.meta.id, annualReturn: s.annualReturn })),
+  );
 
   return (
     <section className="px-6 py-6">
@@ -151,11 +157,18 @@ export default async function AiTradersSection() {
         </p>
 
         <div className="flex flex-col gap-3">
-          {featured && <AiCard summary={featured} size="featured" />}
-          {second && <AiCard summary={second} size="large" />}
+          {featured && (
+            <AiCard summary={featured} size="featured" tier={tiers.get(featured.meta.id)!} />
+          )}
+          {second && <AiCard summary={second} size="large" tier={tiers.get(second.meta.id)!} />}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {rest.map((summary) => (
-              <AiCard key={summary.meta.id} summary={summary} size="small" />
+              <AiCard
+                key={summary.meta.id}
+                summary={summary}
+                size="small"
+                tier={tiers.get(summary.meta.id)!}
+              />
             ))}
           </div>
         </div>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
-import AiAvatar from "@/components/ai/AiAvatar";
+import { assignTiers, TierEmblem } from "@/components/ai/AiTier";
 import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import AiName from "@/components/ai/AiName";
@@ -12,6 +12,7 @@ import {
   annualReturnPercent,
   displayAiSymbol,
   getAiDetail,
+  getAiSummaries,
   getMonthlyPerformance,
   lastYearEndOf,
   isKrwSymbol,
@@ -74,8 +75,12 @@ function sideColor(side: AiTrade["side"]) {
 }
 
 export default async function AiTraderPage({ params }: { params: { id: string } }) {
-  const detail = await getAiDetail(params.id);
+  const [detail, summaries] = await Promise.all([getAiDetail(params.id), getAiSummaries()]);
   if (!detail) notFound();
+  // 홈 카드와 같은 티어 (올해 수익률 순위)
+  const tier = assignTiers(
+    summaries.map((s) => ({ id: s.meta.id, annualReturn: s.annualReturn })),
+  ).get(params.id)!;
   const { meta, equity, holdings, trades } = detail;
   const isFutures = meta.id === "hobanhoney" || meta.id === "wonyotti";
 
@@ -96,7 +101,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
         <section>
           <p className="text-xs font-semibold tracking-[0.2em] text-indigo-500">AI 트레이더</p>
           <div className="mt-2 flex items-center gap-4">
-            <AiAvatar id={meta.id} size="lg" />
+            <TierEmblem tier={tier} size="lg" />
             <div>
               <h1>
                 <AiName name={meta.name} className="text-3xl sm:text-4xl" />
