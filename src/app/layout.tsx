@@ -7,7 +7,7 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 // 검색 결과에선 긴 제목의 뒤가 잘리므로 사람들이 검색할 이름을 앞에 둔다.
 const title = "박호두·짭구·웨돔 실시간 포지션 · AI 워뇨띠 실시간 포지션 | 호반꿀";
 const description =
-  "박호두·짭구·웨돔 등 코인 유튜버 트레이더들이 방송에서 잡은 실제 포지션(롱/숏·진입가·청산가)을 실시간으로 추적함. 트레이더별 승률·롱숏 성향, 인간지표 컨센서스, 워뇨띠 실제 매매 기록 분석과 AI 워뇨띠·AI 호반꿀 등 AI 트레이더 수익률까지.";
+  "박호두·짭구·웨돔 등 코인 유튜버 트레이더들이 방송에서 잡은 실제 포지션(롱/숏·진입가·청산가)을 실시간으로 추적함. 트레이더별 승률·롱숏 성향, 인간지표 컨센서스, 워뇨띠 매매법·실제 매매 기록 분석, AI 워뇨띠·AI 호반꿀 등 AI 트레이더 수익률까지.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
