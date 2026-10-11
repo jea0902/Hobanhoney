@@ -60,6 +60,8 @@ function pickTargets(market: Market, day: string) {
     .slice(0, 100);
   const shorts: { symbol: string; rise: number; priceToSales: number }[] = [];
   for (const { row, cap } of largest) {
+    // REIT는 임대료 매출이 REVENUE 항목에 안 잡혀 P/S가 100배 넘게 나온다 (AMT·CCI·PLD, 2026-10-11 백테스트에서 발견)
+    if (row.sector === "Real Estate") continue;
     const revenue = ttm(market, row.cik, REVENUE, day);
     const before = market.price(row.symbol, addDays(day, -182));
     if (!revenue || revenue <= 0 || !before || cap / revenue < 20) continue;
