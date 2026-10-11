@@ -216,6 +216,9 @@ export function lastYearEndOf(equity: AiEquity[], latest: AiEquity) {
   return equity.filter((row) => row.date < `${latest.date.slice(0, 4)}-01-01`).at(-1) ?? null;
 }
 
+// 홈 카드의 미니 그래프에 쓰는 최근 기간 (일)
+const SPARKLINE_DAYS = 120;
+
 async function getLatestAndLastYearEnd(id: string) {
   const supabase = getSupabase();
   const { data } = await supabase
@@ -223,9 +226,10 @@ async function getLatestAndLastYearEnd(id: string) {
     .select("date, cash, equity, invested, withdrawn")
     .eq("ai", id)
     .order("date", { ascending: false })
-    .limit(1);
-  const latest = data?.[0] ? toEquity(data[0] as AiEquity) : null;
-  if (!latest) return { latest: null, lastYearEnd: null };
+    .limit(SPARKLINE_DAYS);
+  const recent = ((data ?? []) as AiEquity[]).map(toEquity).reverse();
+  const latest = recent.at(-1) ?? null;
+  if (!latest) return { latest: null, lastYearEnd: null, recent };
   const { data: before } = await supabase
     .from("ai_equity_daily")
     .select("date, cash, equity, invested, withdrawn")
@@ -233,7 +237,7 @@ async function getLatestAndLastYearEnd(id: string) {
     .lt("date", `${latest.date.slice(0, 4)}-01-01`)
     .order("date", { ascending: false })
     .limit(1);
-  return { latest, lastYearEnd: before?.[0] ? toEquity(before[0] as AiEquity) : null };
+  return { latest, lastYearEnd: before?.[0] ? toEquity(before[0] as AiEquity) : null, recent };
 }
 
 export async function getAiSummaries() {
@@ -244,7 +248,7 @@ export async function getAiSummaries() {
   ]);
 
   return AI_TRADERS.map((meta, i) => {
-    const { latest, lastYearEnd } = equities[i];
+    const { latest, lastYearEnd, recent } = equities[i];
     const holdings = ((holdingRows ?? []) as HoldingDbRow[])
       .filter((row) => row.ai === meta.id)
       .map(toHolding);
@@ -253,6 +257,8 @@ export async function getAiSummaries() {
       latest,
       annualReturn: latest ? annualReturnPercent(latest, lastYearEnd) : null,
       holdings,
+      // 날짜별 누적 수익률 (입금 시점이 달라도 모양을 비교할 수 있게 금액 대신 수익률로)
+      returnSeries: recent.map((row) => totalReturnPercent(row) ?? 0),
     };
   });
 }

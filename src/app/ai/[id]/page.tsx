@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
+import AiAvatar from "@/components/ai/AiAvatar";
 import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import AiName from "@/components/ai/AiName";
@@ -94,10 +95,15 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
         <section>
           <p className="text-xs font-semibold tracking-[0.2em] text-indigo-500">AI 트레이더</p>
-          <h1 className="mt-1">
-            <AiName name={meta.name} className="text-3xl sm:text-4xl" />
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
+          <div className="mt-2 flex items-center gap-4">
+            <AiAvatar id={meta.id} size="lg" />
+            <div>
+              <h1>
+                <AiName name={meta.name} className="text-3xl sm:text-4xl" />
+              </h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
+            </div>
+          </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryCard label={`연 수익률${latest ? ` (${latest.date.slice(0, 4)}년)` : ""}`}>
