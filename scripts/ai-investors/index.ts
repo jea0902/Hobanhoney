@@ -10,6 +10,7 @@ import { runFearGreed, runKoreanAnt, runWallstreet } from "./funds.ts";
 import { runHobanhoney } from "./hobanhoney.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import { loadAndRefreshMarket } from "./market.ts";
+import { runWonyotti } from "./wonyotti.ts";
 
 interface Result {
   ai: AiId;
@@ -58,6 +59,9 @@ async function main() {
 
   const hobanhoney = await runHobanhoney(market);
   await save({ ai: "hobanhoney", ...hobanhoney });
+
+  const wonyotti = await runWonyotti(market);
+  await save({ ai: "wonyotti", ...wonyotti });
 
   console.log(DRY_RUN ? "[dry-run] DB에 쓰지 않음" : "완료");
 }

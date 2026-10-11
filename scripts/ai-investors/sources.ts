@@ -237,18 +237,20 @@ export async function fetchSp500Changes(since: string) {
   return changes;
 }
 
-// ---- Bybit 1분봉 (AI 호반꿀 강제청산 판정용) ----
+// ---- Bybit 캔들 (AI 호반꿀 강제청산 판정용 1분봉, AI 워뇨띠 1시간봉) ----
 
 export interface Candle {
-  time: number; // 분 시작 시각 (ms)
+  time: number; // 봉 시작 시각 (ms)
   high: number;
   low: number;
   close: number;
 }
 
 // GitHub Actions에서 Bybit을 직접 부르면 전부 실패해서(2026-10-11) 우리 사이트(/api/bybit-kline)를 거친다.
-async function fetchKlinePage(symbol: string, start: number, end: number) {
-  const url = `${process.env.SITE_URL}/api/bybit-kline?symbol=${symbol}&start=${start}&end=${end}`;
+async function fetchKlinePage(symbol: string, start: number, end: number, minutes: number) {
+  const url =
+    `${process.env.SITE_URL}/api/bybit-kline?symbol=${symbol}&start=${start}&end=${end}` +
+    `&interval=${minutes}`;
   let failure = "";
   // 연달아 부르면 가끔 일시적으로 거절돼서(2026-10-11 ZEC·SPCX) 세 번까지 다시 시도한다.
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -271,16 +273,18 @@ async function fetchKlinePage(symbol: string, start: number, end: number) {
   return null;
 }
 
-// Bybit는 한 번에 최대 1000개라 1000분씩 나눠 받는다. 종목이 없으면 null.
-export async function fetchMinuteCandles(
+// Bybit는 한 번에 최대 1000개라 1000봉씩 나눠 받는다. 종목이 없으면 null. minutes는 봉 간격(1 = 1분봉, 60 = 1시간봉).
+export async function fetchCandles(
   symbol: string,
   fromMs: number,
   toMs: number,
+  minutes = 1,
 ): Promise<Candle[] | null> {
+  const step = minutes * 60_000;
   const candles: Candle[] = [];
-  for (let start = fromMs; start <= toMs; start += 1000 * 60_000) {
-    const end = Math.min(start + 999 * 60_000, toMs);
-    const list = await fetchKlinePage(symbol, start, end);
+  for (let start = fromMs; start <= toMs; start += 1000 * step) {
+    const end = Math.min(start + 999 * step, toMs);
+    const list = await fetchKlinePage(symbol, start, end, minutes);
     if (!list) return null;
     for (const [time, , high, low, close] of list) {
       candles.push({
