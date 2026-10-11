@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { AI_TRADERS, getAiSummaries } from "@/lib/aiInvestors";
+import { AI_TRADERS, getAiSummaries, totalReturnPercent } from "@/lib/aiInvestors";
 import { loadKoreanFont } from "@/lib/ogFont";
 
 // 카톡·SNS에 AI 페이지 링크를 붙이면 지금 수익률이 미리보기 이미지로 뜬다 (트레이더 페이지 미리보기와 같은 틀).
@@ -20,7 +20,7 @@ export default async function Image({ params }: { params: { id: string } }) {
   const meta = AI_TRADERS.find((ai) => ai.id === params.id) ?? AI_TRADERS[0];
   const latest = (await getAiSummaries()).find((s) => s.meta.id === meta.id)?.latest ?? null;
 
-  const rate = latest && latest.invested > 0 ? (latest.equity / latest.invested - 1) * 100 : null;
+  const rate = latest ? totalReturnPercent(latest) : null;
   const headline =
     rate === null ? "계산 중" : `누적 수익률 ${rate > 0 ? "+" : ""}${rate.toFixed(1)}%`;
   const details = latest

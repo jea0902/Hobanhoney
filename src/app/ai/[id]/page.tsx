@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
+import { assignTiers, TierEmblem } from "@/components/ai/AiTier";
 import AiEquityChart from "@/components/ai/AiEquityChart";
 import AiMonthlyPerformance from "@/components/ai/AiMonthlyPerformance";
 import AiName from "@/components/ai/AiName";
@@ -11,6 +12,7 @@ import {
   annualReturnPercent,
   displayAiSymbol,
   getAiDetail,
+  getAiSummaries,
   getMonthlyPerformance,
   lastYearEndOf,
   isKrwSymbol,
@@ -73,8 +75,12 @@ function sideColor(side: AiTrade["side"]) {
 }
 
 export default async function AiTraderPage({ params }: { params: { id: string } }) {
-  const detail = await getAiDetail(params.id);
+  const [detail, summaries] = await Promise.all([getAiDetail(params.id), getAiSummaries()]);
   if (!detail) notFound();
+  // 홈 카드와 같은 티어 (올해 수익률 순위)
+  const tier = assignTiers(
+    summaries.map((s) => ({ id: s.meta.id, annualReturn: s.annualReturn })),
+  ).get(params.id)!;
   const { meta, equity, holdings, trades } = detail;
   const isFutures = meta.id === "hobanhoney" || meta.id === "wonyotti";
 
@@ -94,10 +100,15 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
         <section>
           <p className="text-xs font-semibold tracking-[0.2em] text-indigo-500">AI 트레이더</p>
-          <h1 className="mt-1">
-            <AiName name={meta.name} className="text-3xl sm:text-4xl" />
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
+          <div className="mt-2 flex items-center gap-4">
+            <TierEmblem tier={tier} size="lg" />
+            <div>
+              <h1>
+                <AiName name={meta.name} className="text-3xl sm:text-4xl" />
+              </h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{meta.summary}</p>
+            </div>
+          </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryCard label={`연 수익률${latest ? ` (${latest.date.slice(0, 4)}년)` : ""}`}>
@@ -109,7 +120,12 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
             </SummaryCard>
             <SummaryCard label="총자산">{latest ? formatUsd(latest.equity) : "—"}</SummaryCard>
             <SummaryCard label="누적 입금">{latest ? formatUsd(latest.invested) : "—"}</SummaryCard>
-            <SummaryCard label="현금">{latest ? formatUsd(latest.cash) : "—"}</SummaryCard>
+            {/* 출금하는 AI(워뇨띠)는 챙긴 돈이 더 중요해서 현금 대신 누적 출금을 보여준다 */}
+            {latest && latest.withdrawn > 0 ? (
+              <SummaryCard label="누적 출금">{formatUsd(latest.withdrawn)}</SummaryCard>
+            ) : (
+              <SummaryCard label="현금">{latest ? formatUsd(latest.cash) : "—"}</SummaryCard>
+            )}
           </div>
           {latest && <p className="mt-2 text-xs text-gray-400">{latest.date} 기준</p>}
         </section>

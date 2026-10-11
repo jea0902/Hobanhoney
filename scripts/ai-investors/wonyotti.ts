@@ -1,7 +1,16 @@
-// AI 워뇨띠: 워뇨띠의 2018~2021 BitMEX 실제 기록에서 뽑은 "매매 습관"만 닮게 만든 규칙 (TODO.md 25번).
-// 숫자는 수익률을 보고 고른 게 아니라 그 기록의 분포에서 가져왔다. 언제 크게 실을지 고르는 실력은 옮기지 못해서
-// 2018~2021·2022~2026 백테스트 모두 손실이었다 — 그 사실을 상세 페이지에 그대로 밝힌다.
-import { DEPOSIT_DAY, DEPOSIT_KRW, FUTURES_FEE, MAKER_FEE, START } from "./config.ts";
+// AI 워뇨띠: 워뇨띠의 2018~2021 BitMEX 실제 기록에서 뽑은 "매매 습관" + 본인이 100문 100답에서 밝힌 원칙 (TODO.md 25·27번).
+// 단타 숫자는 수익률을 보고 고른 게 아니라 기록의 분포에서 가져왔다. 단타만으로는 2018~2021·2022~2026 백테스트 모두
+// 손실이었고, "상승장에선 자산 30%를 비트로"(기본 포지션)와 "거래량 적으면 휩쏘"(거래량 조건)를 더하니 두 기간 모두 플러스.
+// 다만 수익 대부분은 기본 포지션에서 나온다 — 그 사실을 상세 페이지에 그대로 밝힌다.
+import {
+  DEPOSIT_DAY,
+  FUTURES_FEE,
+  MAKER_FEE,
+  START,
+  WONYOTTI_START_KRW,
+  WONYOTTI_WITHDRAW_NEAR_PEAK,
+  WONYOTTI_WITHDRAW_PROFIT_RATIO,
+} from "./config.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import type { Market } from "./market.ts";
 import { fetchCandles } from "./sources.ts";
@@ -13,7 +22,7 @@ const KST_OFFSET_MS = 9 * HOUR_MS;
 interface CoinRule {
   symbol: string; // DB 형식
   takeProfit: number; // 이긴 포지션의 가격 움직임 중간값
-  addAt: number; // 첫 물타기 가격(첫 진입가 대비)의 중간값
+  addAt: number; // 2분할 진입의 두 번째 가격(첫 진입가 대비)의 중간값
   stopLoss: number; // 진 포지션 손실 폭의 90% 지점
   maxHours: number; // 보유 시간 중간값 근처 (기록과 손실 폭·보유 시간이 가장 닮게 맞춤)
   volatilityQuantile: number; // 24시간 변동폭이 최근 30일 중 이 분위 이상일 때만 진입
@@ -41,11 +50,16 @@ const RULES: CoinRule[] = [
   },
 ];
 
-// 진입·물타기 각각 자산의 25% → 두 종목이 다 물타기해도 합쳐서 1배
+// 2분할 진입(50:50) 각각 자산의 25% → 두 종목이 다 채워져도 단타는 합쳐서 1배
 const ENTRY_RATIO = 0.25;
 const RANGE_HOURS = 4;
 const VOLATILITY_HOURS = 24;
 const VOLATILITY_LOOKBACK_HOURS = 24 * 30;
+// 기본 포지션: BTC가 50일 평균 위(상승 추세)면 자산의 30%를 BTC 롱으로 깔고 간다 (100문 100답 Q8·Q30·Q54)
+const CORE_SYMBOL = "BTC/USDT";
+const CORE_RATIO = 0.3;
+const TREND_HOURS = 24 * 50;
+const HISTORY_HOURS = Math.max(VOLATILITY_LOOKBACK_HOURS + VOLATILITY_HOURS, TREND_HOURS);
 
 interface Position {
   direction: 1 | -1;
@@ -80,8 +94,8 @@ function range(candles: Candle[], i: number, n: number) {
 export async function runWonyotti(market: Market) {
   const now = Date.now();
   const from = Date.parse(`${START}T00:00:00+09:00`);
-  // 변동폭 30일 분위를 계산하려면 시작 전 31일치가 더 필요하다.
-  const fetchFrom = from - (VOLATILITY_LOOKBACK_HOURS + VOLATILITY_HOURS) * HOUR_MS;
+  // 변동폭·거래량 30일 분위와 50일 평균을 계산하려면 시작 전 50일치가 더 필요하다.
+  const fetchFrom = from - HISTORY_HOURS * HOUR_MS;
   const candlesBySymbol = new Map<string, Candle[]>();
   for (const rule of RULES) {
     const candles = await fetchCandles(rule.symbol.replace("/", ""), fetchFrom, now, 60);
@@ -93,8 +107,10 @@ export async function runWonyotti(market: Market) {
     );
   }
 
-  const deposits: number[] = [];
-  // 매월 10일 00:00 (KST) 입금 — AI 호반꿀과 같은 방식
+  // 시작일에 600만원 한 번만 입금 (다른 AI의 매월 적립과 다름)
+  const deposits = [from];
+  // 출금은 시작 다음 달부터 매월 10일 00:00 (KST)에 확인 — 다른 AI의 입금일과 같은 날 (기록상 약 한 달 간격)
+  const withdrawChecks: number[] = [];
   for (
     let month = new Date(`${START.slice(0, 7)}-01T00:00:00Z`);
     ;
@@ -104,12 +120,17 @@ export async function runWonyotti(market: Market) {
       `${month.toISOString().slice(0, 7)}-${String(DEPOSIT_DAY).padStart(2, "0")}T00:00:00+09:00`,
     );
     if (time > now) break;
-    if (time >= from) deposits.push(time);
+    if (month.toISOString().slice(0, 7) > START.slice(0, 7)) withdrawChecks.push(time);
   }
 
   let cash = 0;
   let invested = 0;
+  let withdrawn = 0;
+  // 출금 기준: 직전 출금(또는 입금) 뒤 자산과, 그 뒤 고점
+  let baseline = 0;
+  let peak = 0;
   const positions = new Map<string, Position>();
+  let core: { quantity: number; avgPrice: number; openedAt: number } | null = null;
   const restUntil = new Map<string, number>();
   const lastClose = new Map<string, number>();
   const trades: TradeRow[] = [];
@@ -119,6 +140,7 @@ export async function runWonyotti(market: Market) {
     let total = cash;
     for (const [symbol, p] of positions)
       total += p.direction * p.quantity * (lastClose.get(symbol)! - p.avgPrice);
+    if (core) total += core.quantity * (lastClose.get(CORE_SYMBOL)! - core.avgPrice);
     return total;
   };
   const record = (
@@ -154,10 +176,13 @@ export async function runWonyotti(market: Market) {
 
   for (const time of times) {
     const closeTime = time + HOUR_MS;
+    let deposited = false;
     while (deposits.length > 0 && deposits[0] <= closeTime) {
-      const usd = DEPOSIT_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
+      const usd = WONYOTTI_START_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
       cash += usd;
       invested += usd;
+      baseline += usd;
+      deposited = true;
     }
 
     for (const rule of RULES) {
@@ -167,12 +192,55 @@ export async function runWonyotti(market: Market) {
       const { high, low, close } = candles[i];
       lastClose.set(rule.symbol, close);
 
+      // 기본 포지션: 상승 추세로 바뀌면 자산 30% 롱, 입금 때마다 30%로 다시 맞추고, 50일 평균 아래로 내려가면 정리
+      if (rule.symbol === CORE_SYMBOL && i >= TREND_HOURS) {
+        let sum = 0;
+        for (let k = i - TREND_HOURS + 1; k <= i; k++) sum += candles[k].close;
+        const uptrend = close > sum / TREND_HOURS;
+        if (uptrend && (!core || deposited)) {
+          const change = (totalEquity() * CORE_RATIO) / close - (core?.quantity ?? 0);
+          if (Math.abs(change * close) >= 1) {
+            cash -= Math.abs(change) * close * FUTURES_FEE;
+            if (!core) core = { quantity: 0, avgPrice: close, openedAt: closeTime };
+            if (change > 0) {
+              core.avgPrice =
+                (core.quantity * core.avgPrice + change * close) / (core.quantity + change);
+            } else {
+              cash += -change * (close - core.avgPrice);
+            }
+            core.quantity += change;
+            record(
+              closeTime,
+              CORE_SYMBOL,
+              change > 0 ? "buy" : "sell",
+              Math.abs(change),
+              close,
+              core.quantity === Math.abs(change)
+                ? "기본 포지션 진입: BTC가 50일 평균 위 → 자산 30% 롱"
+                : "기본 포지션 비중을 자산 30%로 맞춤 (입금 반영)",
+            );
+          }
+        } else if (!uptrend && core) {
+          const pnl = core.quantity * (close - core.avgPrice);
+          cash += pnl - core.quantity * close * FUTURES_FEE;
+          record(
+            closeTime,
+            CORE_SYMBOL,
+            "sell",
+            core.quantity,
+            close,
+            `기본 포지션 정리: BTC가 50일 평균 아래로, 손익 ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}`,
+          );
+          core = null;
+        }
+      }
+
       const p = positions.get(rule.symbol);
       if (p) {
         const d = p.direction;
         const worst = d > 0 ? low : high;
         const best = d > 0 ? high : low;
-        // 한 봉 안의 순서는 알 수 없어서 불리한 쪽(물타기 → 손절)을 먼저 본다.
+        // 한 봉 안의 순서는 알 수 없어서 불리한 쪽(2분할 두 번째 진입 → 손절)을 먼저 본다.
         if (!p.added && d * (worst / p.firstPrice - 1) <= -rule.addAt) {
           const price = p.firstPrice * (1 - d * rule.addAt);
           const quantity = (p.firstQuantity * p.firstPrice) / price; // 첫 진입과 같은 금액
@@ -186,7 +254,7 @@ export async function runWonyotti(market: Market) {
             d > 0 ? "buy" : "short",
             quantity,
             price,
-            `물타기 (첫 진입가 ${(rule.addAt * 100).toFixed(1)}% 불리)`,
+            `2분할 두 번째 진입 (첫 진입가에서 ${(rule.addAt * 100).toFixed(1)}%)`,
           );
         }
         const stopPrice = p.avgPrice * (1 - d * rule.stopLoss);
@@ -224,17 +292,23 @@ export async function runWonyotti(market: Market) {
         continue;
       }
 
-      // 진입: 시장이 평소보다 출렁일 때, 4시간 범위 아래 1/3이면 롱·위 1/3이면 숏 (기록상 진입 위치)
+      // 진입: 시장이 평소보다 출렁이고 거래량도 평소 이상일 때, 4시간 범위 아래 1/3이면 롱·위 1/3이면 숏
+      // (진입 위치·변동폭은 기록에서, 거래량 조건은 "거래량 적으면 웬만한 움직임은 휩쏘" Q64에서)
       if (closeTime < (restUntil.get(rule.symbol) ?? 0)) continue;
-      if (i < VOLATILITY_LOOKBACK_HOURS + VOLATILITY_HOURS) continue;
+      if (i < HISTORY_HOURS) continue;
       const volatilities: number[] = [];
+      const volumes: number[] = [];
       for (let k = i - VOLATILITY_LOOKBACK_HOURS + 1; k <= i; k++) {
         const r = range(candles, k, VOLATILITY_HOURS);
         volatilities.push(r.high / r.low - 1);
+        let volume = 0;
+        for (let m = k - VOLATILITY_HOURS + 1; m <= k; m++) volume += candles[m].volume;
+        volumes.push(volume);
       }
       const volatility = volatilities.at(-1)!;
       const threshold = quantile(volatilities, rule.volatilityQuantile);
       if (volatility < threshold) continue;
+      if (volumes.at(-1)! < quantile(volumes, 0.5)) continue;
       const r = range(candles, i, RANGE_HOURS);
       const where = (close - r.low) / (r.high - r.low);
       const direction = where <= 1 / 3 ? 1 : where >= 2 / 3 ? -1 : 0;
@@ -262,10 +336,25 @@ export async function runWonyotti(market: Market) {
       );
     }
 
+    // 출금: 직전 출금 뒤 이익이 났고 자산이 고점 근처면 그 이익의 60%를 뺀다 (지갑 기록의 습관)
+    peak = Math.max(peak, totalEquity());
+    while (withdrawChecks.length > 0 && withdrawChecks[0] <= closeTime) {
+      withdrawChecks.shift();
+      const current = totalEquity();
+      const profit = current - baseline;
+      if (profit > 0 && current >= peak * WONYOTTI_WITHDRAW_NEAR_PEAK) {
+        const amount = Math.min(profit * WONYOTTI_WITHDRAW_PROFIT_RATIO, cash);
+        cash -= amount;
+        withdrawn += amount;
+        baseline = current - amount;
+        peak = current - amount;
+      }
+    }
+
     // 같은 날 기록은 마지막 값으로 덮어쓴다 (하루 끝 자산)
     const date = kstDate(closeTime - 1);
     if (equity.at(-1)?.date === date) equity.pop();
-    equity.push({ ai: "wonyotti", date, cash, equity: totalEquity(), invested });
+    equity.push({ ai: "wonyotti", date, cash, equity: totalEquity(), invested, withdrawn });
   }
 
   const holdings: HoldingRow[] = [...positions].map(([symbol, p]) => ({
@@ -277,5 +366,16 @@ export async function runWonyotti(market: Market) {
     opened_at: new Date(p.openedAt).toISOString(),
     value: p.quantity * lastClose.get(symbol)!,
   }));
+  if (core) {
+    holdings.push({
+      ai: "wonyotti",
+      symbol: CORE_SYMBOL,
+      quantity: core.quantity,
+      avg_price: core.avgPrice,
+      leverage: null,
+      opened_at: new Date(core.openedAt).toISOString(),
+      value: core.quantity * lastClose.get(CORE_SYMBOL)!,
+    });
+  }
   return { trades, holdings, equity };
 }

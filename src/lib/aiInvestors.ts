@@ -22,16 +22,18 @@ export const AI_TRADERS: AiMeta[] = [
     id: "wonyotti",
     name: "AI 워뇨띠",
     seoTitle: "워뇨띠 매매 기록 분석 · AI 워뇨띠 실시간 포지션 | 호반꿀",
-    summary: "워뇨띠의 실제 매매 습관을 닮게 만든 BTC·ETH 단타",
+    summary: "워뇨띠의 실제 매매 습관과 원칙을 닮게 만든 BTC·ETH 트레이딩",
     rules: [
-      "24시간 변동폭이 평소보다 클 때만 진입 (BTC는 최근 30일 중간값 이상, ETH는 상위 25%)",
+      "상승 추세(BTC가 50일 평균 위)에서는 자산의 30%를 BTC 롱으로 기본 보유, 50일 평균 아래로 내려가면 정리",
+      "단타는 24시간 변동폭과 거래량이 평소 이상일 때만 진입 (변동폭은 BTC 최근 30일 중간값 이상, ETH 상위 25%)",
       "최근 4시간 가격 범위의 아래 1/3에서 롱, 위 1/3에서 숏",
-      "진입마다 자산의 25%, 0.3%(ETH 0.4%) 불리해지면 같은 금액으로 1회 물타기",
+      "2분할 진입: 자산의 25%씩, 두 번째는 첫 진입가에서 0.3%(ETH 0.4%)",
       "익절 +0.6%(ETH +1.15%), 손절 -3.2%(ETH -7.8%), 8시간(ETH 10시간) 지나면 정리, 청산 후 12시간(ETH 48시간) 휴식",
-      "모든 숫자는 워뇨띠의 2018~2021 BitMEX 실제 체결 기록에서 가져옴",
+      "입출금: 시작 600만원 이후 추가 입금 없음, 매월 10일 직전 출금 뒤 이익이 났고 자산이 고점 근처(-5% 이내)면 그 이익의 60%를 출금",
+      "단타 숫자는 워뇨띠의 2018~2021 BitMEX 실제 체결 기록에서, 기본 포지션·거래량 조건·2분할은 본인의 100문 100답에서, 입출금은 지갑 기록과 100문 100답에서 가져옴",
     ],
     note:
-      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 Bybit 1시간봉으로 체결했다고 가정함 " +
+      "워뇨띠가 600만원으로 시작했다는 이야기대로, 다른 AI와 달리 2026-03-06에 600만원을 한 번만 입금하고 Bybit 1시간봉으로 체결했다고 가정함 " +
       "(지정가 체결 수수료 0.02%·손절과 시간 정리 0.055%, 펀딩비 미반영, 한 봉 안에서는 불리한 가격이 먼저 닿았다고 가정, 매일 오전 7시 30분에 업데이트)",
   },
   {
@@ -121,6 +123,7 @@ export interface AiEquity {
   cash: number;
   equity: number;
   invested: number;
+  withdrawn: number; // 누적 출금. AI 워뇨띠만 출금하고 나머지는 0
 }
 
 export interface AiTrade {
@@ -178,6 +181,7 @@ function toEquity(row: AiEquity): AiEquity {
     cash: Number(row.cash),
     equity: Number(row.equity),
     invested: Number(row.invested),
+    withdrawn: Number(row.withdrawn ?? 0),
   };
 }
 
@@ -186,12 +190,24 @@ export function largestHolding(holdings: AiHolding[]) {
   return holdings.slice().sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0] ?? null;
 }
 
+// 출금한 돈도 번 돈이므로 손익은 항상 "자산 + 누적 출금" 기준으로 계산한다 (출금 안 하는 AI는 출금 0).
+function withWithdrawals(row: AiEquity) {
+  return row.equity + row.withdrawn;
+}
+
+// 누적 수익률 = (자산 + 누적 출금 − 누적 입금) ÷ 누적 입금
+export function totalReturnPercent(latest: AiEquity) {
+  if (latest.invested <= 0) return null;
+  return (withWithdrawals(latest) / latest.invested - 1) * 100;
+}
+
 // 연 수익률 = 올해 손익 ÷ 전체 누적 입금. 매년 1월 1일에 0부터 다시 시작한다.
-// 올해 손익 = 지금 자산 − 작년 말 자산 − 올해 입금 (작년 기록이 없으면 작년 말 자산·입금은 0).
+// 올해 손익 = (지금 자산 + 누적 출금) − (작년 말 자산 + 누적 출금) − 올해 입금 (작년 기록이 없으면 작년 말 값은 0).
 export function annualReturnPercent(latest: AiEquity, lastYearEnd: AiEquity | null) {
   if (latest.invested <= 0) return null;
   const depositsThisYear = latest.invested - (lastYearEnd?.invested ?? 0);
-  const profitThisYear = latest.equity - (lastYearEnd?.equity ?? 0) - depositsThisYear;
+  const profitThisYear =
+    withWithdrawals(latest) - (lastYearEnd ? withWithdrawals(lastYearEnd) : 0) - depositsThisYear;
   return (profitThisYear / latest.invested) * 100;
 }
 
@@ -200,24 +216,28 @@ export function lastYearEndOf(equity: AiEquity[], latest: AiEquity) {
   return equity.filter((row) => row.date < `${latest.date.slice(0, 4)}-01-01`).at(-1) ?? null;
 }
 
+// 홈 카드의 미니 그래프에 쓰는 최근 기간 (일)
+const SPARKLINE_DAYS = 120;
+
 async function getLatestAndLastYearEnd(id: string) {
   const supabase = getSupabase();
   const { data } = await supabase
     .from("ai_equity_daily")
-    .select("date, cash, equity, invested")
+    .select("date, cash, equity, invested, withdrawn")
     .eq("ai", id)
     .order("date", { ascending: false })
-    .limit(1);
-  const latest = data?.[0] ? toEquity(data[0] as AiEquity) : null;
-  if (!latest) return { latest: null, lastYearEnd: null };
+    .limit(SPARKLINE_DAYS);
+  const recent = ((data ?? []) as AiEquity[]).map(toEquity).reverse();
+  const latest = recent.at(-1) ?? null;
+  if (!latest) return { latest: null, lastYearEnd: null, recent };
   const { data: before } = await supabase
     .from("ai_equity_daily")
-    .select("date, cash, equity, invested")
+    .select("date, cash, equity, invested, withdrawn")
     .eq("ai", id)
     .lt("date", `${latest.date.slice(0, 4)}-01-01`)
     .order("date", { ascending: false })
     .limit(1);
-  return { latest, lastYearEnd: before?.[0] ? toEquity(before[0] as AiEquity) : null };
+  return { latest, lastYearEnd: before?.[0] ? toEquity(before[0] as AiEquity) : null, recent };
 }
 
 export async function getAiSummaries() {
@@ -228,7 +248,7 @@ export async function getAiSummaries() {
   ]);
 
   return AI_TRADERS.map((meta, i) => {
-    const { latest, lastYearEnd } = equities[i];
+    const { latest, lastYearEnd, recent } = equities[i];
     const holdings = ((holdingRows ?? []) as HoldingDbRow[])
       .filter((row) => row.ai === meta.id)
       .map(toHolding);
@@ -237,6 +257,8 @@ export async function getAiSummaries() {
       latest,
       annualReturn: latest ? annualReturnPercent(latest, lastYearEnd) : null,
       holdings,
+      // 날짜별 누적 수익률 (입금 시점이 달라도 모양을 비교할 수 있게 금액 대신 수익률로)
+      returnSeries: recent.map((row) => totalReturnPercent(row) ?? 0),
     };
   });
 }
@@ -251,7 +273,7 @@ export async function getAiDetail(id: string) {
   for (let from = 0; ; from += 1000) {
     const { data } = await supabase
       .from("ai_equity_daily")
-      .select("date, cash, equity, invested")
+      .select("date, cash, equity, invested, withdrawn")
       .eq("ai", id)
       .order("date")
       .range(from, from + 999);
@@ -294,7 +316,7 @@ export interface AiMonth {
   returnPercent: number | null;
 }
 
-// 운영자 월별 성과와 같은 방식: 시드 = 월초 자산 + 그 달 입금, 손익 = 월말 자산 − 시드.
+// 운영자 월별 성과와 같은 방식: 시드 = 월초 자산 + 그 달 입금, 손익 = 월말 자산 + 그 달 출금 − 시드.
 // 월초 자산은 전달 마지막 날 자산. 최신 달이 먼저 오게 돌려준다.
 export function getMonthlyPerformance(equity: AiEquity[]): AiMonth[] {
   const months = [...new Set(equity.map((row) => row.date.slice(0, 7)))];
@@ -305,7 +327,8 @@ export function getMonthlyPerformance(equity: AiEquity[]): AiMonth[] {
       const startEquity = before?.equity ?? 0;
       const deposits = end.invested - (before?.invested ?? 0);
       const seed = startEquity + deposits;
-      const pnl = end.equity - seed;
+      const withdrawals = end.withdrawn - (before?.withdrawn ?? 0);
+      const pnl = end.equity + withdrawals - seed;
       return {
         month,
         seed,

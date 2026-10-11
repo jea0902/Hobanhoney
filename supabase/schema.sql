@@ -204,7 +204,10 @@ create table if not exists ai_equity_daily (
   cash numeric not null,
   equity numeric not null, -- 현금 + 보유 평가액 (USD)
   invested numeric not null, -- 누적 입금 (USD)
+  withdrawn numeric not null default 0, -- 누적 출금 (USD). AI 워뇨띠만 출금함
   primary key (ai, date)
 );
 
 alter table ai_equity_daily enable row level security;
+-- 2026-10-11 추가 (이미 만든 테이블용)
+alter table ai_equity_daily add column if not exists withdrawn numeric not null default 0;
