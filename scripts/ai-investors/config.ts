@@ -34,6 +34,10 @@ export const KNOWN_CIKS: Record<string, string> = {
   AVB: "0000915912", // 2026-08 인수로 상장폐지 (SEC 목록에서 빠짐)
 };
 
+// ---- AI 워뇨띠 ----
+// 다른 AI는 매월 100만원 적립이지만, 워뇨띠는 "600만원으로 시작했다"는 유명한 이야기대로 시작일에 한 번만 넣는다 (사용자 결정).
+export const WONYOTTI_START_KRW = 6_000_000;
+
 // ---- AI 호반꿀 (박호두 반대매매) ----
 export const HOBANHONEY_TARGET = "박호두";
 // 9/27 이전 박호두 기록은 관리자가 수동으로 넣어서 종료가격이 없다 → 자동 기록(종료가격 있음)부터 따라 한다.

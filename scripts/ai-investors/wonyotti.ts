@@ -2,7 +2,7 @@
 // 단타 숫자는 수익률을 보고 고른 게 아니라 기록의 분포에서 가져왔다. 단타만으로는 2018~2021·2022~2026 백테스트 모두
 // 손실이었고, "상승장에선 자산 30%를 비트로"(기본 포지션)와 "거래량 적으면 휩쏘"(거래량 조건)를 더하니 두 기간 모두 플러스.
 // 다만 수익 대부분은 기본 포지션에서 나온다 — 그 사실을 상세 페이지에 그대로 밝힌다.
-import { DEPOSIT_DAY, DEPOSIT_KRW, FUTURES_FEE, MAKER_FEE, START } from "./config.ts";
+import { FUTURES_FEE, MAKER_FEE, START, WONYOTTI_START_KRW } from "./config.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import type { Market } from "./market.ts";
 import { fetchCandles } from "./sources.ts";
@@ -99,19 +99,8 @@ export async function runWonyotti(market: Market) {
     );
   }
 
-  const deposits: number[] = [];
-  // 매월 10일 00:00 (KST) 입금 — AI 호반꿀과 같은 방식
-  for (
-    let month = new Date(`${START.slice(0, 7)}-01T00:00:00Z`);
-    ;
-    month.setUTCMonth(month.getUTCMonth() + 1)
-  ) {
-    const time = Date.parse(
-      `${month.toISOString().slice(0, 7)}-${String(DEPOSIT_DAY).padStart(2, "0")}T00:00:00+09:00`,
-    );
-    if (time > now) break;
-    if (time >= from) deposits.push(time);
-  }
+  // 시작일에 600만원 한 번만 입금 (다른 AI의 매월 적립과 다름)
+  const deposits = [from];
 
   let cash = 0;
   let invested = 0;
@@ -164,7 +153,7 @@ export async function runWonyotti(market: Market) {
     const closeTime = time + HOUR_MS;
     let deposited = false;
     while (deposits.length > 0 && deposits[0] <= closeTime) {
-      const usd = DEPOSIT_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
+      const usd = WONYOTTI_START_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
       cash += usd;
       invested += usd;
       deposited = true;
