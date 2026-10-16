@@ -3,8 +3,10 @@ import { getOwnerBalance, getDeposits, getWithdrawals, getClosedPnl } from "@/li
 import { recordBalanceSnapshot } from "@/lib/balanceSnapshots";
 import { upsertCashFlows } from "@/lib/cashFlows";
 import { upsertClosedTrades } from "@/lib/closedTrades";
+import { syncTradeJournal } from "@/lib/tradeJournal";
 
-// 외부 스케줄러(GitHub Actions)가 6시간마다 호출해서 잔액 스냅샷 + 입출금 + 청산 거래 내역을 쌓는다.
+// 외부 스케줄러(GitHub Actions)가 6시간마다 호출해서 잔액 스냅샷 + 입출금 + 청산 거래 내역을 쌓고,
+// 관리자 매매일지 페이지를 안 열어도 매매일지가 Bybit 포지션을 따라가게 동기화한다.
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
   await Promise.all([
     upsertCashFlows([...(deposits ?? []), ...(withdrawals ?? [])]),
     upsertClosedTrades(closedTrades ?? []),
+    syncTradeJournal(),
   ]);
 
   return NextResponse.json({ ok: true, totalEquity: balance.totalEquity });
