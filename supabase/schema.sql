@@ -232,3 +232,24 @@ select * from (values
   ('principle', '반드시 매매일지를 작성한다.', timestamptz '2026-10-17 00:00:04+09')
 ) as seed(kind, content, created_at)
 where not exists (select 1 from founder_notes);
+
+-- 운영자 매매일지. 관리자 페이지 "매매일지"(/admin/journal)를 열 때와 6시간 자동 수집(/api/founder-snapshot) 때
+-- Bybit 열린 포지션과 맞춰서, 새 포지션은 자동으로 항목을 만들고 사라진 포지션은 종료로 표시한다.
+-- 진입·종료 근거만 운영자가 직접 쓴다. 두 동기화 사이에 열었다 닫은 짧은 포지션은 잡히지 않는다.
+create table if not exists trade_journal (
+  id uuid primary key default gen_random_uuid(),
+  symbol text not null, -- Bybit 형식 "BTCUSDT"
+  direction text not null check (direction in ('Long', 'Short')),
+  position_value numeric not null, -- 비중(USDT). 열려 있는 동안 동기화마다 최신 값으로 갱신 (분할 매수 반영)
+  opened_at timestamptz not null, -- Bybit 포지션 진입 시각
+  closed_at timestamptz, -- 포지션이 사라진 걸 확인한 동기화 시각. null이면 진행 중
+  entry_reason text,
+  exit_reason text,
+  created_at timestamptz not null default now()
+);
+
+-- 같은 종목·방향의 진행 중 항목은 하나뿐이어야 한다 (동기화가 겹쳐도 중복 생성 방지).
+create unique index if not exists trade_journal_open_idx
+  on trade_journal (symbol, direction) where closed_at is null;
+
+alter table trade_journal enable row level security;
