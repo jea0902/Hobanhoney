@@ -211,3 +211,24 @@ create table if not exists ai_equity_daily (
 alter table ai_equity_daily enable row level security;
 -- 2026-10-11 추가 (이미 만든 테이블용)
 alter table ai_equity_daily add column if not exists withdrawn numeric not null default 0;
+
+-- 운영자 매매원칙·전략. 관리자 페이지 "운영자 매매원칙 및 전략"(/admin/principles)에서 직접 추가·수정·삭제한다.
+-- 화면에는 created_at 순서대로 번호를 매겨 보여준다 (수정해도 순서는 그대로).
+create table if not exists founder_notes (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('principle', 'strategy')), -- 매매원칙 | 전략
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table founder_notes enable row level security;
+
+-- 2026-10-17: /founder 페이지 코드에 적혀 있던 매매원칙 4개를 옮겨 넣는다. 순서를 지키려고 시각을 1초씩 띄운다.
+insert into founder_notes (kind, content, created_at)
+select * from (values
+  ('principle', '욕심을 절제하고, 손절은 짧고 익절은 긴 근거가 많은 자리만 반드시 기다려서 진입한다 (손익비 2 이상)', timestamptz '2026-10-17 00:00:01+09'),
+  ('principle', '분할 매수, 분할 매도는 신이다.', timestamptz '2026-10-17 00:00:02+09'),
+  ('principle', 'SL만큼은 절대 건드리지 말 것', timestamptz '2026-10-17 00:00:03+09'),
+  ('principle', '반드시 매매일지를 작성한다.', timestamptz '2026-10-17 00:00:04+09')
+) as seed(kind, content, created_at)
+where not exists (select 1 from founder_notes);

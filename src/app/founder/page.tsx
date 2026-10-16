@@ -13,14 +13,6 @@ import { displaySymbol } from "@/lib/symbol";
 
 export const dynamic = "force-dynamic";
 
-// 운영자 본인의 매매원칙. 바꾸려면 여기를 고치면 된다.
-const TRADING_PRINCIPLES = [
-  "욕심을 절제하고, 손절은 짧고 익절은 긴 근거가 많은 자리만 반드시 기다려서 진입한다 (손익비 2 이상)",
-  "분할 매수, 분할 매도는 신이다.",
-  "SL만큼은 절대 건드리지 말 것",
-  "반드시 매매일지를 작성한다.",
-];
-
 function formatUsd(n: number) {
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -62,7 +54,7 @@ export default async function FounderPage() {
           <h1 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">운영자 포지션</h1>
 
           {positionsWithoutStopLoss.length > 0 && (
-            // 원칙 3번 위반을 놓치지 않게 맨 위에서 깜빡인다 (동작 줄이기 설정이면 깜빡임 없음).
+            // "SL은 절대 건드리지 말 것" 원칙 위반을 놓치지 않게 맨 위에서 깜빡인다 (동작 줄이기 설정이면 깜빡임 없음).
             <div className="mb-4 rounded-2xl border-2 border-red-500 bg-red-50 p-4 motion-safe:animate-pulse dark:bg-red-950/40">
               <p className="text-sm font-extrabold text-red-600 dark:text-red-400 sm:text-base">
                 🚨 SL 없는 포지션 {positionsWithoutStopLoss.length}개
@@ -74,20 +66,6 @@ export default async function FounderPage() {
               </p>
             </div>
           )}
-
-          <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">매매원칙</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                - 리스크 관리는 의지가 아니라 구조적으로 설계
-              </p>
-            </div>
-            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-gray-700 dark:text-gray-300 sm:text-base">
-              {TRADING_PRINCIPLES.map((principle) => (
-                <li key={principle}>{principle}</li>
-              ))}
-            </ol>
-          </div>
 
           <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
