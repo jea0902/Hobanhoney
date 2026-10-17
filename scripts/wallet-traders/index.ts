@@ -29,6 +29,7 @@ interface OpenState {
   entryCost: number; // 진입 체결 가격 × 수량 합
   entrySize: number;
   maxSize: number;
+  size: number; // 지금 수량 (롱 +, 숏 −). 다음 체결의 startPosition과 맞는지 보려고 둔다.
   pnl: number; // 실현손익 합 (수수료 제외 전)
   fees: number;
 }
@@ -49,21 +50,24 @@ async function hyperliquid(body: object) {
 }
 
 // startTime 이후 체결을 오래된 순으로 끝까지 받는다 (한 번에 최대 2,000건).
+// 주문 하나가 같은 밀리초에 여러 체결로 쪼개져서, 다음 페이지를 "마지막 시각 + 1"부터 받으면 경계의 체결이 빠진다
+// (2026-10-17 첫 수집에서 PUMP 종료를 놓침). 그래서 마지막 시각부터 다시 받고 겹치는 건 체결 번호로 거른다.
 async function fetchFillsSince(address: string, startTime: number) {
-  const fills: Fill[] = [];
+  const unique = new Map<number, Fill>();
   for (let start = startTime; ;) {
     const page = (await hyperliquid({
       type: "userFillsByTime",
       user: address,
       startTime: start,
     })) as Fill[];
-    fills.push(...page);
+    const before = unique.size;
+    for (const fill of page) unique.set(fill.tid, fill);
     if (page.length < 2000) break;
-    start = Math.max(...page.map((f) => f.time)) + 1;
+    const lastTime = Math.max(...page.map((f) => f.time));
+    // 같은 밀리초 체결이 2,000건을 넘어 새 체결이 없으면 무한 반복을 막으려고 1ms 넘긴다.
+    start = unique.size === before ? lastTime + 1 : lastTime;
     await sleep(2_000);
   }
-  // 페이지 경계에서 같은 체결이 두 번 올 수 있어 체결 번호로 거른다.
-  const unique = new Map(fills.map((f) => [f.tid, f]));
   return [...unique.values()].sort((a, b) => a.time - b.time || a.tid - b.tid);
 }
 
@@ -119,6 +123,7 @@ async function syncTrader(name: string, address: string) {
     entryCost: Number(fill.px) * Math.abs(size),
     entrySize: Math.abs(size),
     maxSize: Math.abs(size),
+    size,
     pnl: 0,
     fees: 0,
   });
@@ -127,7 +132,16 @@ async function syncTrader(name: string, address: string) {
     const size = Number(fill.sz) * (fill.side === "B" ? 1 : -1);
     const before = Number(fill.startPosition);
     const after = before + size;
-    const state = open[fill.coin];
+    let state: OpenState | undefined = open[fill.coin];
+
+    // 추적 중인 수량과 체결 직전 수량이 다르면 중간 체결이 빠졌다는 뜻 → 이 포지션은 믿을 수 없으니 버리고 다시 0부터 센다.
+    if (state && !isZero(before - state.size, before)) {
+      console.log(
+        `${name}: ${fill.coin} 체결 누락 감지, 진행 중 포지션 버림 (${state.size} → ${before})`,
+      );
+      delete open[fill.coin];
+      state = undefined;
+    }
 
     if (!state) {
       // 처음 받은 기록 중간부터 이어지는 포지션은 진입을 모르니 건너뛰고, 0에서 시작하는 것부터 센다.
@@ -141,6 +155,7 @@ async function syncTrader(name: string, address: string) {
 
     state.fees += Number(fill.fee);
     state.pnl += Number(fill.closedPnl);
+    state.size = after;
     if (isZero(after, before)) {
       await finish(fill.coin, state, fill.time);
       delete open[fill.coin];
