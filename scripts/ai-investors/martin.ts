@@ -1,7 +1,8 @@
 // AI 마틴: BTC 변동성 수축 후 돌파 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
-// 일봉 종가가 200일선 위면 롱만, 아래면 숏만. 4시간봉 볼린저밴드가 좁아졌다가 그 방향으로 밴드를 뚫으면 5배로 진입한다.
-// 종료는 두 가지뿐: 4시간봉 종가가 일봉 20일선을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
-// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 20일선 종료면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// 일봉 종가가 200일선 위면 롱만, 아래면 숏만. 4시간봉 볼린저밴드가 좁아졌다가 그 방향으로 밴드를 뚫으면 10배로 진입한다.
+// 일봉은 200일선만 보고, 나머지(밴드·진입·종료)는 전부 4시간봉 기준 (2026-10-18 사용자 정정).
+// 종료는 두 가지뿐: 4시간봉 종가가 4시간봉 20선(볼린저 중심선)을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
+// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 20선 종료면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
 // (처음 규칙은 주봉·일봉 이평선 정렬 + 4시간봉 20/50선 크로스였으나 매매가 너무 적고 추세 초입을 놓쳐서 바꿈)
 import {
   DEPOSIT_DAY,
@@ -109,7 +110,6 @@ export async function runMartin(market: Market) {
     if (time >= from) deposits.push(time);
   }
 
-  const d20 = ema(20);
   const d200 = ema(200);
   // 마지막으로 끝난 일봉의 종가 (200일선 위·아래 판단용)
   let dayClose = 0;
@@ -173,9 +173,9 @@ export async function runMartin(market: Market) {
     if (position) {
       const p = position;
       const liquidationPrice = p.entryPrice * (1 - p.direction * LIQUIDATION_MOVE);
-      // 한 봉 안의 순서는 알 수 없어서 강제청산을 20일선 종료보다 먼저 본다
+      // 한 봉 안의 순서는 알 수 없어서 강제청산을 20선 종료보다 먼저 본다
       const liquidated = p.direction > 0 ? low <= liquidationPrice : high >= liquidationPrice;
-      const crossedBack = p.direction > 0 ? close < d20.value : close > d20.value;
+      const crossedBack = p.direction > 0 ? close < middle : close > middle;
       if (liquidated || crossedBack) {
         const exitPrice = liquidated ? liquidationPrice : close;
         const exitFee = liquidated ? 0 : p.quantity * exitPrice * FUTURES_FEE;
@@ -192,7 +192,7 @@ export async function runMartin(market: Market) {
           const nextRound = liquidated ? round + 1 : 1;
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
-            : `4시간봉 종가가 일봉 20일선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+            : `4시간봉 종가가 20선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
           const next = liquidated ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
           record(
             closeTime,
@@ -206,9 +206,8 @@ export async function runMartin(market: Market) {
       }
     }
 
-    // 일봉이 끝나는 봉에서 일봉 이평선을 갱신한다. 이 봉의 진입·종료 판단은 위에서 전날까지의 20일선으로 했다.
+    // 일봉이 끝나는 봉에서 일봉 200일선을 갱신한다.
     if (closeTime % DAY_MS === 0) {
-      update(d20, close);
       update(d200, close);
       dayClose = close;
     }
@@ -223,9 +222,7 @@ export async function runMartin(market: Market) {
           : dayClose < d200.value && close < lower
             ? -1
             : 0;
-      // 이미 20일선 반대편이면 들어가자마자 나오게 되니 쉰다
-      const wrongSide = direction > 0 ? close < d20.value : close > d20.value;
-      if (squeezed && direction !== 0 && !wrongSide) {
+      if (squeezed && direction !== 0) {
         let margin = 0;
         let reason = "";
         if (closeTime >= from) {
