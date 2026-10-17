@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { getOnlineCount } from "@/lib/presence";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const TABS = [
@@ -10,9 +9,7 @@ const TABS = [
 
 // 네이버 증권처럼 화면 전체 폭에 탭을 두고, 선택된 탭은 굵은 밑줄로 표시한다.
 // active를 안 넘기면(소개·가이드·운영자 페이지 등) 어떤 탭도 선택 표시하지 않는다.
-export default async function Navbar({ active }: { active?: (typeof TABS)[number]["key"] }) {
-  const onlineCount = await getOnlineCount();
-
+export default function Navbar({ active }: { active?: (typeof TABS)[number]["key"] }) {
   return (
     <header className="sticky top-0 z-20 h-14 w-full border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
       <div className="flex h-full items-center justify-between gap-2 px-4 sm:px-6">
@@ -43,10 +40,6 @@ export default async function Navbar({ active }: { active?: (typeof TABS)[number
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <div className="hidden items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            {onlineCount}명 접속 중
-          </div>
           <ThemeToggle />
         </div>
       </div>

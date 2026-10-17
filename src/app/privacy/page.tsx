@@ -9,11 +9,10 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <ContentPage title="개인정보처리방침" updatedAt="2026년 9월 30일">
+    <ContentPage title="개인정보처리방침" updatedAt="2026년 10월 17일">
       <h2>1. 수집하는 정보</h2>
       <p>회원가입이 없으며 개인정보를 입력받지 않음. 자동으로 저장되는 정보는 다음과 같음.</p>
       <ul>
-        <li>presence_id 쿠키 — 접속자 수 집계용 임의 식별값, 24시간 뒤 만료</li>
         <li>theme 쿠키 — 다크/라이트 모드 설정</li>
         <li>
           서버 접속 기록 — 호스팅(Vercel)이 보안을 위해 IP, 브라우저, 접속 시각을 처리할 수 있음
