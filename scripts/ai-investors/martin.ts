@@ -1,7 +1,8 @@
 // AI 마틴: BTC 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
 // 방향은 주봉 20/50선·일봉 50/200선이 같은 쪽일 때만 정하고, 그 방향으로 4시간봉 20선이 50선을 뚫을 때 20배로 진입한다.
-// 일봉 종가가 50일선을 반대로 2일 연속 넘으면 추세가 끝난 걸로 보고 나온다.
-// 1회차 증거금은 하프 켈리, 강제청산되면 다음 회차는 직전의 2배, 추세 종료로 나오면 손익과 상관없이 1회차로 (2026-10-17 사용자 결정). 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// 일봉 종가가 20일선을 반대로 2일 연속 넘으면 추세가 끝난 걸로 보고 나온다.
+// (처음엔 50일선이었으나 매매가 5.6년에 25번뿐이라 켈리 표본이 너무 적어 20일선으로 바꿈 — 2026-10-17 사용자 결정)
+// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 추세 종료로 나오면 손익과 상관없이 1회차로 (2026-10-17 사용자 결정). 다음 회차를 계좌가 못 버티면 1회차로 리셋.
 import {
   DEPOSIT_DAY,
   DEPOSIT_KRW,
@@ -59,7 +60,8 @@ function mean(values: number[]) {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
-// 지금까지 끝난 매매(증거금 대비 수익률)로 구한 하프 켈리. 계좌 대비 1회차 증거금 비율.
+// 지금까지 끝난 매매(증거금 대비 수익률)로 구한 쿼터 켈리. 계좌 대비 1회차 증거금 비율.
+// 매매 기록이 수십 건뿐이라 켈리를 그대로 쓰면 과하게 나와서(하프 켈리로 1회차가 계좌의 7%) 1/4만 쓴다.
 function kelly(returns: number[]) {
   const wins = returns.filter((r) => r > 0);
   const losses = returns.filter((r) => r <= 0);
@@ -67,8 +69,8 @@ function kelly(returns: number[]) {
     return { ratio: MARTIN_MIN_RATIO, winRate: 0, payoff: 0 };
   const winRate = wins.length / returns.length;
   const payoff = mean(wins) / -mean(losses);
-  const half = (winRate - (1 - winRate) / payoff) / 2;
-  return { ratio: Math.max(MARTIN_MIN_RATIO, half), winRate, payoff };
+  const quarter = (winRate - (1 - winRate) / payoff) / 4;
+  return { ratio: Math.max(MARTIN_MIN_RATIO, quarter), winRate, payoff };
 }
 
 export async function runMartin(market: Market) {
@@ -98,11 +100,12 @@ export async function runMartin(market: Market) {
 
   const h20 = ema(20);
   const h50 = ema(50);
+  const d20 = ema(20);
   const d50 = ema(50);
   const d200 = ema(200);
   const w20 = ema(20);
   const w50 = ema(50);
-  // 일봉 종가가 50일선 아래(위)에서 연속으로 마감한 날 수
+  // 일봉 종가가 20일선 아래(위)에서 연속으로 마감한 날 수
   let daysBelow = 0;
   let daysAbove = 0;
 
@@ -151,10 +154,11 @@ export async function runMartin(market: Market) {
     update(h50, close);
     const isDayEnd = closeTime % DAY_MS === 0;
     if (isDayEnd) {
+      update(d20, close);
       update(d50, close);
       update(d200, close);
-      daysBelow = close < d50.value ? daysBelow + 1 : 0;
-      daysAbove = close > d50.value ? daysAbove + 1 : 0;
+      daysBelow = close < d20.value ? daysBelow + 1 : 0;
+      daysAbove = close > d20.value ? daysAbove + 1 : 0;
     }
     // 1970-01-01은 목요일이라 4일을 빼면 월요일 00:00 (UTC) 경계가 된다
     if ((closeTime - 4 * DAY_MS) % WEEK_MS === 0) {
@@ -191,7 +195,7 @@ export async function runMartin(market: Market) {
           const nextRound = liquidated ? round + 1 : 1;
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
-            : `일봉 종가가 50일선 ${p.direction > 0 ? "아래" : "위"}로 2일 연속 → 추세 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+            : `일봉 종가가 20일선 ${p.direction > 0 ? "아래" : "위"}로 2일 연속 → 추세 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
           const next = liquidated ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
           record(
             closeTime,
