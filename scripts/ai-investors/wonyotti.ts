@@ -163,7 +163,8 @@ export async function runWonyotti(market: Market) {
   for (const time of times) {
     const closeTime = time + HOUR_MS;
     let deposited = false;
-    while (deposits.length > 0 && deposits[0] <= closeTime) {
+    // 10일 00:00 입금이 9일 마지막 봉(23~24시)에 들어가 9일 기록으로 찍히지 않게, 그 시각이 지난 봉에서 넣는다
+    while (deposits.length > 0 && deposits[0] < closeTime) {
       const usd = DEPOSIT_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
       cash += usd;
       invested += usd;

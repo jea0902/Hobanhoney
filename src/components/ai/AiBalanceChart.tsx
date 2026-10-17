@@ -13,9 +13,11 @@ import {
 import { useIsDark } from "@/components/useIsDark";
 
 // AI마다 색을 고정한다 (화면 순서 = 색 순서, 순위가 바뀌어도 색은 그대로).
-// dataviz 기본 팔레트의 1~7번 — 이웃한 색끼리 색각 이상이 있어도 구분되게 검증된 순서. 다크 모드는 같은 색의 다크용 단계.
-const LIGHT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"];
-const DARK_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9"];
+// 사용자 요청으로 워뇨띠부터 버리까지 빨주노초파남보 (2026-10-17). 무지개 순서는 이웃한 색(빨↔주, 남↔보)이
+// 색각 이상일 때 헷갈릴 수 있어(dataviz 검증: 정상 시력 ΔE 14.8, 색각 이상 7.3) 범례·툴팁 이름과 아래 표로 보완한다.
+// 다크 모드는 어두운 배경에서 보이게 같은 색을 한 단계 밝게.
+const LIGHT_COLORS = ["#c92a2a", "#f76707", "#e0a800", "#2f9e44", "#1c7ed6", "#3b2fa8", "#ae3ec9"];
+const DARK_COLORS = ["#f03e3e", "#ff922b", "#fab005", "#40c057", "#339af0", "#7950f2", "#cc5de8"];
 
 function formatUsd(value: number) {
   return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
