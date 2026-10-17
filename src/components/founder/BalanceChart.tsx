@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsDark } from "@/components/useIsDark";
 import { useEffect, useRef, useState } from "react";
 import {
   LineChart,
@@ -19,21 +20,6 @@ function formatDateLabel(iso: string) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yy}.${mm}.${dd}`;
-}
-
-// recharts 색상은 인라인 props라 Tailwind dark: 클래스가 안 먹혀서, <html> 클래스를 직접 감지한다.
-function useIsDark() {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
-    check();
-    const observer = new MutationObserver(check);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-
-  return isDark;
 }
 
 // 그래프가 실제로 그려지는 픽셀 너비를 재서, 화면 크기에 안 겹치는 라벨 개수를 계산한다.

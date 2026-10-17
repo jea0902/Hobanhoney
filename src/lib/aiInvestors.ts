@@ -264,12 +264,9 @@ export async function getAiSummaries() {
   });
 }
 
-export async function getAiDetail(id: string) {
-  const meta = AI_TRADERS.find((ai) => ai.id === id);
-  if (!meta) return null;
+// 날짜순 일별 자산. Supabase는 한 번에 1000행까지만 돌려줘서 나눠 읽는다 (하루 1행이라 3년쯤 지나면 넘는다).
+async function getEquityRows(id: string) {
   const supabase = getSupabase();
-
-  // Supabase는 한 번에 1000행까지만 돌려줘서 나눠 읽는다 (하루 1행이라 3년쯤 지나면 넘는다).
   const equity: AiEquity[] = [];
   for (let from = 0; ; from += 1000) {
     const { data } = await supabase
@@ -281,6 +278,14 @@ export async function getAiDetail(id: string) {
     equity.push(...((data ?? []) as AiEquity[]).map(toEquity));
     if (!data || data.length < 1000) break;
   }
+  return equity;
+}
+
+export async function getAiDetail(id: string) {
+  const meta = AI_TRADERS.find((ai) => ai.id === id);
+  if (!meta) return null;
+  const supabase = getSupabase();
+  const equity = await getEquityRows(id);
 
   const [{ data: holdingRows }, { data: tradeRows }] = await Promise.all([
     supabase.from("ai_holdings").select("*").eq("ai", id),
@@ -339,4 +344,22 @@ export function getMonthlyPerformance(equity: AiEquity[]): AiMonth[] {
       };
     })
     .reverse();
+}
+
+// AI 탭 그래프용: 월마다 AI별 시드 대비 수익률. 아직 기록이 없는 달은 null.
+export async function getMonthlyReturnsByAi() {
+  const perAi = await Promise.all(
+    AI_TRADERS.map(async (meta) => ({
+      id: meta.id,
+      months: getMonthlyPerformance(await getEquityRows(meta.id)),
+    })),
+  );
+  const months = [...new Set(perAi.flatMap((ai) => ai.months.map((m) => m.month)))].sort();
+  return months.map((month) => {
+    const row: Record<string, string | number | null> = { month };
+    for (const ai of perAi) {
+      row[ai.id] = ai.months.find((m) => m.month === month)?.returnPercent ?? null;
+    }
+    return row;
+  });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useIsDark } from "@/components/useIsDark";
 import {
   CartesianGrid,
   Line,
@@ -11,19 +11,6 @@ import {
   YAxis,
 } from "recharts";
 import type { AiEquity } from "@/lib/aiInvestors";
-
-// recharts 색상은 인라인 props라 Tailwind dark: 클래스가 안 먹혀서, <html> 클래스를 직접 감지한다.
-function useIsDark() {
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
-    check();
-    const observer = new MutationObserver(check);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-  return isDark;
-}
 
 // 총자산과 누적 입금을 같이 그려서, 두 선의 간격이 곧 손익으로 보이게 한다.
 export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
