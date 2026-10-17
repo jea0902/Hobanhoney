@@ -8,6 +8,7 @@ import type { TraderStats, TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 import HorizontalScrollArrows from "@/components/HorizontalScrollArrows";
 import { getFounderTrader, traderHref } from "@/lib/founderTrader";
+import { getWalletTraders } from "@/lib/walletTraders";
 
 const AVATAR_COLORS = ["bg-gray-400", "bg-gray-500", "bg-gray-600", "bg-gray-700", "bg-gray-800"];
 
@@ -16,9 +17,11 @@ function getAvatarColor(name: string) {
   return AVATAR_COLORS[sum % AVATAR_COLORS.length];
 }
 
-function getElapsedMinutes(createdAt: string) {
+// 진입 시각을 모르는 포지션(지갑 추적 트레이더의 수집 전 포지션)은 "—"
+function formatElapsed(createdAt: string) {
+  if (!createdAt) return "—";
   const diffMs = Date.now() - new Date(createdAt).getTime();
-  return Math.max(0, Math.round(diffMs / 60000));
+  return `${Math.max(0, Math.round(diffMs / 60000))}분`;
 }
 
 function formatPercent(n: number) {
@@ -78,12 +81,13 @@ export default async function PositionGrid() {
   const traders = getTraderGroups(positions);
 
   // 운영자 최무상은 유튜버와 같은 트레이더 한 명으로 맨 아래에 붙이고, 컨센서스에도 1표로 센다.
-  const [youtubers, founder, usdtKrwRate] = await Promise.all([
+  const [youtubers, walletTraders, founder, usdtKrwRate] = await Promise.all([
     withRepresentativePosition(traders),
+    getWalletTraders(),
     getFounderTrader(),
     getUsdtKrwRate(),
   ]);
-  const tradersWithMarkPrice = [...youtubers, founder];
+  const tradersWithMarkPrice = [...youtubers, ...walletTraders, founder];
   const { longCount, shortCount } = countDirections(tradersWithMarkPrice);
 
   return (
@@ -185,15 +189,21 @@ function Avatar({ trader }: { trader: TraderGroup }) {
   );
 }
 
+function TraderName({ trader }: { trader: TraderGroup }) {
+  return (
+    <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
+      <Avatar trader={trader} />
+      <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
+        {trader.traderName}
+      </span>
+    </Link>
+  );
+}
+
 function TraderCell({ trader }: { trader: TraderGroup }) {
   return (
     <td className="whitespace-nowrap px-4 py-3">
-      <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
-        <Avatar trader={trader} />
-        <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
-          {trader.traderName}
-        </span>
-      </Link>
+      <TraderName trader={trader} />
     </td>
   );
 }
@@ -242,12 +252,7 @@ function TraderCard({
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between">
-        <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
-          <Avatar trader={trader} />
-          <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
-            {trader.traderName}
-          </span>
-        </Link>
+        <TraderName trader={trader} />
         <div className="text-right">
           <WinRateDisplay stats={trader.stats} />
         </div>
@@ -303,7 +308,7 @@ function TraderCard({
                 <span>
                   {row.quantity} · {row.leverage}x
                 </span>
-                <span>경과 {getElapsedMinutes(row.created_at)}분</span>
+                <span>경과 {formatElapsed(row.created_at)}</span>
               </div>
             </div>
           );
@@ -324,7 +329,7 @@ function TraderRow({
   const row = trader.openRow;
   const elapsedCell = row ? (
     <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-400 dark:text-gray-500">
-      {getElapsedMinutes(row.created_at)}분
+      {formatElapsed(row.created_at)}
     </td>
   ) : (
     <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-300 dark:text-gray-600">

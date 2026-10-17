@@ -253,3 +253,33 @@ create unique index if not exists trade_journal_open_idx
   on trade_journal (symbol, direction) where closed_at is null;
 
 alter table trade_journal enable row level security;
+
+-- 지갑 추적 트레이더(제프리황 등)의 포지션 기록. 하이퍼리퀴드 체결 기록을 "진입 → 완전 종료" 1건으로 묶어 저장한다.
+-- scripts/wallet-traders가 매일(GitHub Actions ai-investors 워크플로) 이어서 처리한다.
+create table if not exists wallet_trades (
+  id uuid primary key default gen_random_uuid(),
+  trader_name text not null,
+  coin text not null, -- 하이퍼리퀴드 종목 이름 ("ETH")
+  direction text not null check (direction in ('Long', 'Short')),
+  entry_price numeric not null, -- 진입 체결들의 가중평균가
+  max_size numeric not null, -- 포지션이 가장 컸을 때 수량
+  leverage numeric not null, -- 종목별 현재 레버리지 설정 (과거 설정은 API로 알 수 없어 근사)
+  pnl numeric not null, -- 실현손익 − 수수료 (USDC)
+  result_pnl_percent numeric not null, -- pnl ÷ 증거금(최대 수량 × 평균 진입가 ÷ 레버리지) × 100
+  result text not null check (result in ('win', 'draw', 'loss')), -- ±3% 기준 (유튜버와 같음)
+  opened_at timestamptz not null,
+  closed_at timestamptz not null,
+  unique (trader_name, opened_at, coin)
+);
+
+create index if not exists wallet_trades_trader_idx on wallet_trades (trader_name, closed_at);
+alter table wallet_trades enable row level security;
+
+-- 지갑 추적 이어서 하기용 상태. 체결이 하루 1만 건 넘게 나와서 매번 처음부터 받지 않고 마지막 처리 시점부터 받는다.
+create table if not exists wallet_sync (
+  trader_name text primary key,
+  synced_until bigint not null, -- 마지막으로 처리한 체결 시각 (ms)
+  open_positions jsonb not null default '{}' -- 아직 안 닫힌 포지션의 진행 상태 (종목 → 상태)
+);
+
+alter table wallet_sync enable row level security;

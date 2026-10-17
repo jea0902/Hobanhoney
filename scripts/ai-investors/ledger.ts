@@ -31,7 +31,7 @@ export interface EquityRow {
   cash: number;
   equity: number;
   invested: number;
-  withdrawn?: number; // 누적 출금 (USD). 출금하는 AI(워뇨띠)만 넣고, 나머지는 DB 기본값 0
+  withdrawn?: number; // 누적 출금 (USD). 출금하는 AI만 넣고(지금은 없음), 나머지는 DB 기본값 0
 }
 
 interface Holding {

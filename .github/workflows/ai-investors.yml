@@ -18,6 +18,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # 지갑 추적 트레이더(제프리황 등) 포지션 기록. 실패해도 AI 계산은 돌게 한다.
+      - name: Run wallet traders
+        run: node scripts/wallet-traders/index.ts
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - name: Run AI investors
         run: node scripts/ai-investors/index.ts
         env:

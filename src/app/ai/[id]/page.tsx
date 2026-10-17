@@ -120,7 +120,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
             </SummaryCard>
             <SummaryCard label="총자산">{latest ? formatUsd(latest.equity) : "—"}</SummaryCard>
             <SummaryCard label="누적 입금">{latest ? formatUsd(latest.invested) : "—"}</SummaryCard>
-            {/* 출금하는 AI(워뇨띠)는 챙긴 돈이 더 중요해서 현금 대신 누적 출금을 보여준다 */}
+            {/* 출금하는 AI(2026-10-17 이후 지금은 없음)는 챙긴 돈이 더 중요해서 현금 대신 누적 출금을 보여준다 */}
             {latest && latest.withdrawn > 0 ? (
               <SummaryCard label="누적 출금">{formatUsd(latest.withdrawn)}</SummaryCard>
             ) : (

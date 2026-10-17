@@ -52,7 +52,7 @@ export async function getFounderTrader() {
   return { trader, markPrice: top?.currentPrice ?? null, positions: positions ?? [] };
 }
 
-// 홈 표에서 누르면 갈 곳. 최무상은 운영자 페이지(/founder)로 보낸다.
+// 홈 표에서 누르면 갈 곳. 최무상은 운영자 페이지(/founder), 나머지는 트레이더 기록 페이지.
 export function traderHref(traderName: string) {
   return traderName === FOUNDER_TRADER_NAME
     ? "/founder"

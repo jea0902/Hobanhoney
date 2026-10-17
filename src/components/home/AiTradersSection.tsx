@@ -152,8 +152,7 @@ export default async function AiTradersSection() {
           </span>
         </h2>
         <p className="-mt-2 mb-4 text-xs leading-5 text-gray-500 dark:text-gray-400 sm:text-sm">
-          정해진 전략대로만 매매하는 가상 투자자 (2026-03-06부터 매월 100만원 적립 가정, AI 워뇨띠만
-          600만원으로 시작)
+          정해진 전략대로만 매매하는 가상 투자자 (2026-03-06부터 매월 100만원 적립 가정)
         </p>
 
         <div className="flex flex-col gap-3">

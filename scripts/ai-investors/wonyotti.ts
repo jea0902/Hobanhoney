@@ -2,15 +2,7 @@
 // 단타 숫자는 수익률을 보고 고른 게 아니라 기록의 분포에서 가져왔다. 단타만으로는 2018~2021·2022~2026 백테스트 모두
 // 손실이었고, "상승장에선 자산 30%를 비트로"(기본 포지션)와 "거래량 적으면 휩쏘"(거래량 조건)를 더하니 두 기간 모두 플러스.
 // 다만 수익 대부분은 기본 포지션에서 나온다 — 그 사실을 상세 페이지에 그대로 밝힌다.
-import {
-  DEPOSIT_DAY,
-  FUTURES_FEE,
-  MAKER_FEE,
-  START,
-  WONYOTTI_START_KRW,
-  WONYOTTI_WITHDRAW_NEAR_PEAK,
-  WONYOTTI_WITHDRAW_PROFIT_RATIO,
-} from "./config.ts";
+import { DEPOSIT_DAY, DEPOSIT_KRW, FUTURES_FEE, MAKER_FEE, START } from "./config.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import type { Market } from "./market.ts";
 import { fetchCandles } from "./sources.ts";
@@ -107,10 +99,8 @@ export async function runWonyotti(market: Market) {
     );
   }
 
-  // 시작일에 600만원 한 번만 입금 (다른 AI의 매월 적립과 다름)
-  const deposits = [from];
-  // 출금은 시작 다음 달부터 매월 10일 00:00 (KST)에 확인 — 다른 AI의 입금일과 같은 날 (기록상 약 한 달 간격)
-  const withdrawChecks: number[] = [];
+  // 다른 AI와 같은 조건: 매월 10일 00:00 (KST)에 100만원 입금, 출금 없음 (2026-10-17 사용자 결정 — 처음엔 600만원 한 번 입금 + 출금 습관이었음)
+  const deposits: number[] = [];
   for (
     let month = new Date(`${START.slice(0, 7)}-01T00:00:00Z`);
     ;
@@ -120,15 +110,11 @@ export async function runWonyotti(market: Market) {
       `${month.toISOString().slice(0, 7)}-${String(DEPOSIT_DAY).padStart(2, "0")}T00:00:00+09:00`,
     );
     if (time > now) break;
-    if (month.toISOString().slice(0, 7) > START.slice(0, 7)) withdrawChecks.push(time);
+    if (time >= from) deposits.push(time);
   }
 
   let cash = 0;
   let invested = 0;
-  let withdrawn = 0;
-  // 출금 기준: 직전 출금(또는 입금) 뒤 자산과, 그 뒤 고점
-  let baseline = 0;
-  let peak = 0;
   const positions = new Map<string, Position>();
   let core: { quantity: number; avgPrice: number; openedAt: number } | null = null;
   const restUntil = new Map<string, number>();
@@ -177,11 +163,11 @@ export async function runWonyotti(market: Market) {
   for (const time of times) {
     const closeTime = time + HOUR_MS;
     let deposited = false;
-    while (deposits.length > 0 && deposits[0] <= closeTime) {
-      const usd = WONYOTTI_START_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
+    // 10일 00:00 입금이 9일 마지막 봉(23~24시)에 들어가 9일 기록으로 찍히지 않게, 그 시각이 지난 봉에서 넣는다
+    while (deposits.length > 0 && deposits[0] < closeTime) {
+      const usd = DEPOSIT_KRW / market.price("KRW=X", kstDate(deposits.shift()!))!;
       cash += usd;
       invested += usd;
-      baseline += usd;
       deposited = true;
     }
 
@@ -336,25 +322,10 @@ export async function runWonyotti(market: Market) {
       );
     }
 
-    // 출금: 직전 출금 뒤 이익이 났고 자산이 고점 근처면 그 이익의 60%를 뺀다 (지갑 기록의 습관)
-    peak = Math.max(peak, totalEquity());
-    while (withdrawChecks.length > 0 && withdrawChecks[0] <= closeTime) {
-      withdrawChecks.shift();
-      const current = totalEquity();
-      const profit = current - baseline;
-      if (profit > 0 && current >= peak * WONYOTTI_WITHDRAW_NEAR_PEAK) {
-        const amount = Math.min(profit * WONYOTTI_WITHDRAW_PROFIT_RATIO, cash);
-        cash -= amount;
-        withdrawn += amount;
-        baseline = current - amount;
-        peak = current - amount;
-      }
-    }
-
     // 같은 날 기록은 마지막 값으로 덮어쓴다 (하루 끝 자산)
     const date = kstDate(closeTime - 1);
     if (equity.at(-1)?.date === date) equity.pop();
-    equity.push({ ai: "wonyotti", date, cash, equity: totalEquity(), invested, withdrawn });
+    equity.push({ ai: "wonyotti", date, cash, equity: totalEquity(), invested });
   }
 
   const holdings: HoldingRow[] = [...positions].map(([symbol, p]) => ({
