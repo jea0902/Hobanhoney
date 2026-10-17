@@ -21,6 +21,9 @@ import type { FactRow, PriceRow, SplitRow } from "./sources.ts";
 export const FUND_SYMBOLS = [
   "VOO",
   "QQQ",
+  "SPY", // AI 포트
+  "IEF", // AI 포트
+  "BTC-USD", // AI 포트 (비트코인 현물)
   "SGOV",
   "GLD",
   "IBIT",

@@ -87,6 +87,17 @@ const T = {
 
 // AI가 7명이면 그랜드마스터·에메랄드를 빼고 7단계로 (사용자 결정). 9명 이상이면 9단계 전부.
 const SEVEN: Tier[] = [T.challenger, T.master, T.diamond, T.platinum, T.gold, T.silver, T.bronze];
+// 8명이면 7단계에 에메랄드를 다시 넣는다 (AI 마틴 추가로 8명, 같은 티어가 둘 생기지 않게).
+const EIGHT: Tier[] = [
+  T.challenger,
+  T.master,
+  T.diamond,
+  T.emerald,
+  T.platinum,
+  T.gold,
+  T.silver,
+  T.bronze,
+];
 const NINE: Tier[] = [
   T.challenger,
   T.grandmaster,
@@ -101,7 +112,7 @@ const NINE: Tier[] = [
 
 // 올해 수익률이 높은 순으로 티어를 준다. 수익률이 아직 없는 AI는 맨 뒤.
 export function assignTiers(items: { id: string; annualReturn: number | null }[]) {
-  const ladder = items.length >= NINE.length ? NINE : SEVEN;
+  const ladder = items.length >= NINE.length ? NINE : items.length === EIGHT.length ? EIGHT : SEVEN;
   const ranked = [...items].sort(
     (a, b) => (b.annualReturn ?? -Infinity) - (a.annualReturn ?? -Infinity),
   );

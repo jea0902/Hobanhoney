@@ -6,10 +6,11 @@ import { runBurry } from "./burry.ts";
 import { runBuffett } from "./buffett.ts";
 import type { AiId } from "./config.ts";
 import { DRY_RUN, logEvent, replaceRows } from "./db.ts";
-import { runFearGreed, runKoreanAnt, runWallstreet } from "./funds.ts";
+import { runFearGreed, runKoreanAnt, runPort, runWallstreet } from "./funds.ts";
 import { runHobanhoney } from "./hobanhoney.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import { loadAndRefreshMarket } from "./market.ts";
+import { runMartin } from "./martin.ts";
 import { runWonyotti } from "./wonyotti.ts";
 
 interface Result {
@@ -47,6 +48,7 @@ async function main() {
     runFearGreed(market, usToday),
     runBuffett(market, usToday),
     runBurry(market, usToday),
+    runPort(market, usToday),
   ]) {
     const today = ledger.ai === "korean_ant" ? krToday : usToday;
     await save({
@@ -62,6 +64,9 @@ async function main() {
 
   const wonyotti = await runWonyotti(market);
   await save({ ai: "wonyotti", ...wonyotti });
+
+  const martin = await runMartin(market);
+  await save({ ai: "martin", ...martin });
 
   console.log(DRY_RUN ? "[dry-run] DB에 쓰지 않음" : "완료");
 }

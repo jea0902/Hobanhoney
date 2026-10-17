@@ -46,24 +46,24 @@ function HoldingLabel({ holding, equity }: { holding: AiHolding | null; equity: 
   );
 }
 
-// 크기별 스타일. 맨 위 AI 워뇨띠와 AI 호반꿀은 한 줄에 반반, 살짝 크게(색만 다름). 나머지는 작은 카드.
+// 크기별 스타일. 맨 위 줄 AI 워뇨띠·AI 호반꿀·AI 포트는 색으로 강조(워뇨띠만 색이 다름). 세 칸이 되며 폭이 좁아져서 글자 크기는 작은 카드와 같게.
 const STYLES: Record<
   CardSize,
   { card: string; emblem: "md" | "sm"; name: string; rate: string; chart: string }
 > = {
   featured: {
     card: "p-4 sm:p-5 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-white dark:border-amber-900/60 dark:from-amber-950/40 dark:via-gray-900 dark:to-gray-900",
-    emblem: "md",
-    name: "text-xl sm:text-2xl",
-    rate: "text-2xl sm:text-3xl",
-    chart: "h-12",
+    emblem: "sm",
+    name: "text-lg",
+    rate: "text-xl",
+    chart: "h-10",
   },
   large: {
     card: "p-4 sm:p-5 border-yellow-200 bg-gradient-to-br from-yellow-50/70 via-white to-white dark:border-yellow-900/50 dark:from-yellow-950/20 dark:via-gray-900 dark:to-gray-900",
-    emblem: "md",
-    name: "text-xl sm:text-2xl",
-    rate: "text-2xl sm:text-3xl",
-    chart: "h-12",
+    emblem: "sm",
+    name: "text-lg",
+    rate: "text-xl",
+    chart: "h-10",
   },
   small: {
     card: "p-4 border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-900",
@@ -82,7 +82,7 @@ function AiCard({ summary, size, tier }: { summary: Summary; size: CardSize; tie
   return (
     <Link
       href={`/ai/${meta.id}`}
-      className={`group flex flex-col rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${style.card}`}
+      className={`group flex h-full flex-col rounded-2xl border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${style.card}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -90,7 +90,7 @@ function AiCard({ summary, size, tier }: { summary: Summary; size: CardSize; tie
           <div className="min-w-0">
             <AiName name={meta.name} className={`${style.name} group-hover:underline`} />
             <p
-              className={`mt-0.5 text-xs text-gray-500 dark:text-gray-400 sm:text-sm ${size === "small" ? "line-clamp-1" : ""}`}
+              className={`mt-0.5 text-xs text-gray-500 dark:text-gray-400 sm:text-sm ${size === "small" ? "line-clamp-1" : "line-clamp-2"}`}
             >
               {meta.summary}
             </p>
@@ -134,8 +134,8 @@ export default async function AiTradersSection() {
   } catch {
     summaries = [];
   }
-  // AI_TRADERS 순서대로: 첫 번째(워뇨띠)는 가장 크게, 두 번째(호반꿀)는 살짝 크게, 나머지는 작은 카드
-  const [featured, second, ...rest] = summaries;
+  // AI_TRADERS 순서대로: 첫 번째(워뇨띠)는 가장 눈에 띄게, 두·세 번째(호반꿀·포트)는 살짝 크게, 나머지는 작은 카드
+  const [featured, second, third, ...rest] = summaries;
   // 올해 수익률 순위로 티어 (챌린저 ~ 브론즈)
   const tiers = assignTiers(
     summaries.map((s) => ({ id: s.meta.id, annualReturn: s.annualReturn })),
@@ -156,12 +156,17 @@ export default async function AiTradersSection() {
         </p>
 
         <div className="flex flex-col gap-3">
-          {/* 워뇨띠·호반꿀은 한 줄에 반반 (모바일은 위아래) */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* 워뇨띠·호반꿀·포트는 넓은 화면에서 한 줄에 셋 (아래 카드들과 같은 칸 폭, 중간 화면은 둘 + 하나) */}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {featured && (
               <AiCard summary={featured} size="featured" tier={tiers.get(featured.meta.id)!} />
             )}
             {second && <AiCard summary={second} size="large" tier={tiers.get(second.meta.id)!} />}
+            {third && (
+              <div className="sm:col-span-2 xl:col-span-1">
+                <AiCard summary={third} size="large" tier={tiers.get(third.meta.id)!} />
+              </div>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {rest.map((summary) => (

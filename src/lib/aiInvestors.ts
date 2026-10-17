@@ -16,7 +16,7 @@ const STOCK_NOTE =
   "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 모든 매수, 매도는 그날 종가로 체결했다고 가정함 " +
   "(배당은 배당락일에 반영, 매일 오전 7시 30분에 업데이트)";
 
-// 화면에 나오는 순서. 가장 눈에 띄게 AI 워뇨띠, 그다음 AI 호반꿀(사이트 대표 AI)을 맨 위에 둔다.
+// 화면에 나오는 순서. 가장 눈에 띄게 AI 워뇨띠, 그다음 AI 호반꿀(사이트 대표 AI)과 AI 포트를 맨 위 줄에 둔다.
 export const AI_TRADERS: AiMeta[] = [
   {
     id: "wonyotti",
@@ -48,6 +48,21 @@ export const AI_TRADERS: AiMeta[] = [
     note:
       "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 박호두의 진입가·종료가로 체결했다고 가정함 " +
       "(강제청산은 Bybit 1분봉으로 판정, 수수료 0.055% 반영·펀딩비 미반영, 매일 오전 7시 30분에 업데이트)",
+  },
+  {
+    id: "port",
+    name: "AI 포트",
+    summary: "나스닥·S&P500·국채·금·비트코인을 200일선 위에서만 담는 분산 포트폴리오",
+    rules: [
+      "목표 비중: 나스닥100(QQQ) 40%, S&P500(SPY) 20%, 미국 중기국채(IEF) 20%, 금(GLD) 10%, 비트코인 현물 10%",
+      "매월 입금일에 자산마다 200일선 위면 목표 비중만큼 보유, 아래면 그 몫은 현금(단기국채 금리)으로 두고 전체 리밸런싱",
+      "한 달 사이에 200일선을 깨도 다음 입금일까지 기다림 (매일 점검은 백테스트에서 매매만 늘고 결과가 더 나빴음)",
+      "백테스트(2005~2026, 세금 전): 연 12.2%·최대 하락 15.9% (같은 기간 나스닥100 적립 연 15.2%·최대 하락 53.4%)",
+      "세금·환전·슬리피지를 넉넉히 반영하면 연 11.3% (나스닥100 적립 15.9%) — 매년 리밸런싱 이익에 양도세가 붙어서 차이가 커짐",
+    ],
+    note:
+      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 모든 매수, 매도는 그날 종가로 체결했다고 가정함 " +
+      "(비트코인은 야후 BTC-USD 일봉 종가, 수수료 0.1%, 세금 미반영, 매일 오전 7시 30분에 업데이트)",
   },
   {
     id: "wallstreet",
@@ -107,6 +122,21 @@ export const AI_TRADERS: AiMeta[] = [
     ],
     note: STOCK_NOTE,
   },
+  {
+    id: "martin",
+    name: "AI 마틴",
+    summary: "BTC 변동성 수축 후 돌파를 타는 추세추종 + 마틴게일 베팅",
+    rules: [
+      "일봉 종가가 200일선 위면 롱만, 아래면 숏만",
+      "4시간봉 볼린저밴드(20, 2σ) 폭이 최근 6개월 중 하위 20%로 좁아졌다가, 그 방향으로 밴드를 뚫으면 BTC 5배 진입",
+      "손절 없이 종료는 두 가지뿐: 4시간봉 종가가 4시간봉 50선을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산",
+      "1회차 증거금은 계좌의 1%",
+      "마틴게일: 손실로 끝나면(강제청산 포함) 다음 증거금을 직전의 2배로, 이익으로 끝나면 1회차로. 다음 회차를 계좌가 감당하지 못하면 1회차로 리셋",
+    ],
+    note:
+      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 Bybit 4시간봉 종가로 체결했다고 가정함 " +
+      "(일봉은 4시간봉을 UTC 기준으로 묶어 계산, 강제청산은 4시간봉 고가·저가로 판정, 수수료 0.055% 반영·펀딩비 미반영, 매일 오전 7시 30분에 업데이트)",
+  },
 ];
 
 export interface AiHolding {
@@ -147,6 +177,7 @@ const AI_SYMBOL_NAMES: Record<string, string> = {
   "114260.KS": "KODEX 국고채3년",
   "411060.KS": "ACE KRX금현물",
   "BTC-KRW": "비트코인",
+  "BTC-USD": "비트코인",
 };
 
 export function displayAiSymbol(symbol: string) {
@@ -363,16 +394,63 @@ export async function getMonthlyReturnsByAi() {
   });
 }
 
-// AI 탭 잔액 추이 그래프용: 날짜마다 AI별 총자산·누적 입금(`{id}_invested`)과 그래프용 공통 누적 입금(`invested`).
+// AI 탭 그래프의 기준선: 다른 AI와 같은 조건(2026-03-06부터 매월 10일 100만원)으로 나스닥100(QQQ)만 사 모았을 때.
+// AI 월가 장부와 같은 가정 — 10일이 휴장이면 다음 거래일 종가에 수수료 0.1%로 사고, 배당은 받은 날 종가로 재투자한다.
+export const NASDAQ_BASELINE = { id: "nasdaq", name: "나스닥100 적립 (기준)" };
+
+async function getNasdaqDca() {
+  const supabase = getSupabase();
+  const read = async (symbol: string, from: string) => {
+    const { data } = await supabase
+      .from("ai_prices")
+      .select("date, close, dividend")
+      .eq("symbol", symbol)
+      .gte("date", from)
+      .order("date");
+    return (data ?? []).map((row) => ({
+      date: row.date as string,
+      close: Number(row.close),
+      dividend: Number(row.dividend),
+    }));
+  };
+  // 환율은 입금일 이전 마지막 값이 필요해서 시작 열흘 전부터 받는다
+  const [qqq, krw] = await Promise.all([read("QQQ", "2026-03-06"), read("KRW=X", "2026-02-24")]);
+
+  const depositDays = new Set<string>();
+  for (const month of new Set(qqq.map((row) => row.date.slice(0, 7)))) {
+    const day = qqq.find((row) => row.date >= `${month}-10`);
+    if (day) depositDays.add(day.date);
+  }
+
+  let shares = 0;
+  let invested = 0;
+  const rows: AiEquity[] = [];
+  for (const { date, close, dividend } of qqq) {
+    shares += (shares * dividend) / close;
+    if (depositDays.has(date)) {
+      const usd = 1_000_000 / krw.findLast((row) => row.date <= date)!.close;
+      shares += (usd * (1 - 0.001)) / close;
+      invested += usd;
+    }
+    rows.push({ date, cash: 0, equity: shares * close, invested, withdrawn: 0 });
+  }
+  return rows;
+}
+
+// AI 탭 잔액 추이 그래프용: 날짜마다 AI별(나스닥100 기준선 포함) 총자산·누적 입금(`{id}_invested`)과 그래프용 공통 누적 입금(`invested`).
 // AI마다 기록 날짜가 달라서(미국·한국 거래일, 코인은 매일) 기록이 없는 날은 직전 값을 이어 쓴다.
 // 모든 AI가 같은 날 같은 금액을 입금하므로 누적 입금은 하나만 그린다(환율 차이로 조금씩 달라서 가장 큰 값).
 export async function getEquityTimeline() {
-  const perAi = await Promise.all(
-    AI_TRADERS.map(async (meta) => ({
+  const perAi = await Promise.all([
+    ...AI_TRADERS.map(async (meta) => ({
       id: meta.id,
       byDate: new Map((await getEquityRows(meta.id)).map((row) => [row.date, row])),
     })),
-  );
+    getNasdaqDca().then((rows) => ({
+      id: NASDAQ_BASELINE.id,
+      byDate: new Map(rows.map((row) => [row.date, row])),
+    })),
+  ]);
   const dates = [...new Set(perAi.flatMap((ai) => [...ai.byDate.keys()]))].sort();
   const last = new Map<string, AiEquity>();
   return dates.map((date) => {

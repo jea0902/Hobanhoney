@@ -14,12 +14,22 @@ import {
 } from "recharts";
 import { useIsDark } from "@/components/useIsDark";
 
-// AI마다 색을 고정한다 (화면 순서 = 색 순서, 순위가 바뀌어도 색은 그대로).
+// AI마다 색을 id로 고정한다 (화면 순서·순위가 바뀌어도 색은 그대로). [밝은 화면, 다크 모드]
 // 사용자 요청으로 워뇨띠부터 버리까지 빨주노초파남보 (2026-10-17). 무지개 순서는 이웃한 색(빨↔주, 남↔보)이
 // 색각 이상일 때 헷갈릴 수 있어(dataviz 검증: 정상 시력 ΔE 14.8, 색각 이상 7.3) 범례·툴팁 이름과 아래 표로 보완한다.
 // 다크 모드는 어두운 배경에서 보이게 같은 색을 한 단계 밝게.
-const LIGHT_COLORS = ["#c92a2a", "#f76707", "#e0a800", "#2f9e44", "#1c7ed6", "#3b2fa8", "#ae3ec9"];
-const DARK_COLORS = ["#f03e3e", "#ff922b", "#fab005", "#40c057", "#339af0", "#7950f2", "#cc5de8"];
+// AI 마틴은 검정(다크 모드는 흰색), AI 포트는 청록: 남은 후보 중 이웃 색과 덜 헷갈리는 쪽 (파랑과는 범례로 구분).
+const COLORS: Record<string, [string, string]> = {
+  wonyotti: ["#c92a2a", "#f03e3e"],
+  hobanhoney: ["#f76707", "#ff922b"],
+  wallstreet: ["#e0a800", "#fab005"],
+  korean_ant: ["#2f9e44", "#40c057"],
+  fear_greed: ["#1c7ed6", "#339af0"],
+  buffett: ["#3b2fa8", "#7950f2"],
+  burry: ["#ae3ec9", "#cc5de8"],
+  martin: ["#343a40", "#f1f3f5"],
+  port: ["#15aabf", "#3bc9db"],
+};
 
 function formatUsd(value: number) {
   return `${value < 0 ? "-" : ""}$${Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -43,19 +53,23 @@ type View = (typeof VIEWS)[number]["key"];
 
 // 운영자 페이지 "잔액 추이"처럼 AI들을 한 그래프에 겹쳐서, 같은 돈을 넣고 누가 더 불렸는지 보이게 한다.
 // 잔액 보기의 회색 점선은 모두가 똑같이 넣은 누적 입금 — 이 선보다 위면 번 것, 아래면 잃은 것.
+// 회색 긴 점선은 같은 돈으로 나스닥100만 사 모았을 때(기준선) — AI가 그냥 지수 적립보다 나은지 비교한다.
 export default function AiBalanceChart({
   ais,
+  baseline,
   rows,
 }: {
   ais: { id: string; name: string }[];
+  baseline: { id: string; name: string };
   rows: Record<string, string | number | null>[];
 }) {
   const [view, setView] = useState<View>("equity");
   const isDark = useIsDark();
-  const colors = isDark ? DARK_COLORS : LIGHT_COLORS;
   const tickColor = isDark ? "#9CA3AF" : "#6B7280";
+  const series = [...ais, baseline];
+  const baselineColor = isDark ? "#D1D5DB" : "#6B7280";
   const nameOf = (key: unknown) =>
-    key === "invested" ? "누적 입금" : (ais.find((ai) => ai.id === key)?.name ?? String(key));
+    key === "invested" ? "누적 입금" : (series.find((s) => s.id === key)?.name ?? String(key));
   const format =
     view === "equity" ? formatUsd : view === "profit" ? formatSignedUsd : formatPercent;
 
@@ -65,7 +79,7 @@ export default function AiBalanceChart({
       label: `${date.slice(2, 4)}.${date.slice(5, 7)}.${date.slice(8, 10)}`,
       invested: row.invested,
     };
-    for (const ai of ais) {
+    for (const ai of series) {
       const equity = row[ai.id] as number | null;
       const invested = row[`${ai.id}_invested`] as number | null;
       if (equity === null || invested === null) point[ai.id] = null;
@@ -130,8 +144,8 @@ export default function AiBalanceChart({
               // 기본은 이름순 정렬이라, 선 색과 같은 화면 순서로 고정한다
               itemSorter={(item) =>
                 item.dataKey === "invested"
-                  ? ais.length
-                  : ais.findIndex((ai) => ai.id === item.dataKey)
+                  ? series.length
+                  : series.findIndex((s) => s.id === item.dataKey)
               }
               formatter={(value) => (
                 <span style={{ color: tickColor, fontSize: 12 }}>{nameOf(value)}</span>
@@ -143,7 +157,7 @@ export default function AiBalanceChart({
                 dataKey="invested"
                 stroke={isDark ? "#6B7280" : "#9CA3AF"}
                 strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeDasharray="2 4"
                 dot={false}
                 isAnimationActive={false}
               />
@@ -153,15 +167,24 @@ export default function AiBalanceChart({
                 y={0}
                 stroke={isDark ? "#6B7280" : "#9CA3AF"}
                 strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeDasharray="2 4"
               />
             )}
-            {ais.map((ai, i) => (
+            <Line
+              type="monotone"
+              dataKey={baseline.id}
+              stroke={baselineColor}
+              strokeWidth={2.5}
+              strokeDasharray="10 4"
+              dot={false}
+              isAnimationActive={false}
+            />
+            {ais.map((ai) => (
               <Line
                 key={ai.id}
                 type="monotone"
                 dataKey={ai.id}
-                stroke={colors[i]}
+                stroke={COLORS[ai.id][isDark ? 1 : 0]}
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
