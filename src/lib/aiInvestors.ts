@@ -378,16 +378,63 @@ export async function getMonthlyReturnsByAi() {
   });
 }
 
-// AI 탭 잔액 추이 그래프용: 날짜마다 AI별 총자산·누적 입금(`{id}_invested`)과 그래프용 공통 누적 입금(`invested`).
+// AI 탭 그래프의 기준선: 다른 AI와 같은 조건(2026-03-06부터 매월 10일 100만원)으로 나스닥100(QQQ)만 사 모았을 때.
+// AI 월가 장부와 같은 가정 — 10일이 휴장이면 다음 거래일 종가에 수수료 0.1%로 사고, 배당은 받은 날 종가로 재투자한다.
+export const NASDAQ_BASELINE = { id: "nasdaq", name: "나스닥100 적립 (기준)" };
+
+async function getNasdaqDca() {
+  const supabase = getSupabase();
+  const read = async (symbol: string, from: string) => {
+    const { data } = await supabase
+      .from("ai_prices")
+      .select("date, close, dividend")
+      .eq("symbol", symbol)
+      .gte("date", from)
+      .order("date");
+    return (data ?? []).map((row) => ({
+      date: row.date as string,
+      close: Number(row.close),
+      dividend: Number(row.dividend),
+    }));
+  };
+  // 환율은 입금일 이전 마지막 값이 필요해서 시작 열흘 전부터 받는다
+  const [qqq, krw] = await Promise.all([read("QQQ", "2026-03-06"), read("KRW=X", "2026-02-24")]);
+
+  const depositDays = new Set<string>();
+  for (const month of new Set(qqq.map((row) => row.date.slice(0, 7)))) {
+    const day = qqq.find((row) => row.date >= `${month}-10`);
+    if (day) depositDays.add(day.date);
+  }
+
+  let shares = 0;
+  let invested = 0;
+  const rows: AiEquity[] = [];
+  for (const { date, close, dividend } of qqq) {
+    shares += (shares * dividend) / close;
+    if (depositDays.has(date)) {
+      const usd = 1_000_000 / krw.findLast((row) => row.date <= date)!.close;
+      shares += (usd * (1 - 0.001)) / close;
+      invested += usd;
+    }
+    rows.push({ date, cash: 0, equity: shares * close, invested, withdrawn: 0 });
+  }
+  return rows;
+}
+
+// AI 탭 잔액 추이 그래프용: 날짜마다 AI별(나스닥100 기준선 포함) 총자산·누적 입금(`{id}_invested`)과 그래프용 공통 누적 입금(`invested`).
 // AI마다 기록 날짜가 달라서(미국·한국 거래일, 코인은 매일) 기록이 없는 날은 직전 값을 이어 쓴다.
 // 모든 AI가 같은 날 같은 금액을 입금하므로 누적 입금은 하나만 그린다(환율 차이로 조금씩 달라서 가장 큰 값).
 export async function getEquityTimeline() {
-  const perAi = await Promise.all(
-    AI_TRADERS.map(async (meta) => ({
+  const perAi = await Promise.all([
+    ...AI_TRADERS.map(async (meta) => ({
       id: meta.id,
       byDate: new Map((await getEquityRows(meta.id)).map((row) => [row.date, row])),
     })),
-  );
+    getNasdaqDca().then((rows) => ({
+      id: NASDAQ_BASELINE.id,
+      byDate: new Map(rows.map((row) => [row.date, row])),
+    })),
+  ]);
   const dates = [...new Set(perAi.flatMap((ai) => [...ai.byDate.keys()]))].sort();
   const last = new Map<string, AiEquity>();
   return dates.map((date) => {

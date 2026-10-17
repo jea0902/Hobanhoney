@@ -62,19 +62,24 @@ type View = (typeof VIEWS)[number]["key"];
 
 // 운영자 페이지 "잔액 추이"처럼 AI들을 한 그래프에 겹쳐서, 같은 돈을 넣고 누가 더 불렸는지 보이게 한다.
 // 잔액 보기의 회색 점선은 모두가 똑같이 넣은 누적 입금 — 이 선보다 위면 번 것, 아래면 잃은 것.
+// 회색 긴 점선은 같은 돈으로 나스닥100만 사 모았을 때(기준선) — AI가 그냥 지수 적립보다 나은지 비교한다.
 export default function AiBalanceChart({
   ais,
+  baseline,
   rows,
 }: {
   ais: { id: string; name: string }[];
+  baseline: { id: string; name: string };
   rows: Record<string, string | number | null>[];
 }) {
   const [view, setView] = useState<View>("equity");
   const isDark = useIsDark();
   const colors = isDark ? DARK_COLORS : LIGHT_COLORS;
   const tickColor = isDark ? "#9CA3AF" : "#6B7280";
+  const series = [...ais, baseline];
+  const baselineColor = isDark ? "#D1D5DB" : "#6B7280";
   const nameOf = (key: unknown) =>
-    key === "invested" ? "누적 입금" : (ais.find((ai) => ai.id === key)?.name ?? String(key));
+    key === "invested" ? "누적 입금" : (series.find((s) => s.id === key)?.name ?? String(key));
   const format =
     view === "equity" ? formatUsd : view === "profit" ? formatSignedUsd : formatPercent;
 
@@ -84,7 +89,7 @@ export default function AiBalanceChart({
       label: `${date.slice(2, 4)}.${date.slice(5, 7)}.${date.slice(8, 10)}`,
       invested: row.invested,
     };
-    for (const ai of ais) {
+    for (const ai of series) {
       const equity = row[ai.id] as number | null;
       const invested = row[`${ai.id}_invested`] as number | null;
       if (equity === null || invested === null) point[ai.id] = null;
@@ -149,8 +154,8 @@ export default function AiBalanceChart({
               // 기본은 이름순 정렬이라, 선 색과 같은 화면 순서로 고정한다
               itemSorter={(item) =>
                 item.dataKey === "invested"
-                  ? ais.length
-                  : ais.findIndex((ai) => ai.id === item.dataKey)
+                  ? series.length
+                  : series.findIndex((s) => s.id === item.dataKey)
               }
               formatter={(value) => (
                 <span style={{ color: tickColor, fontSize: 12 }}>{nameOf(value)}</span>
@@ -162,7 +167,7 @@ export default function AiBalanceChart({
                 dataKey="invested"
                 stroke={isDark ? "#6B7280" : "#9CA3AF"}
                 strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeDasharray="2 4"
                 dot={false}
                 isAnimationActive={false}
               />
@@ -172,9 +177,18 @@ export default function AiBalanceChart({
                 y={0}
                 stroke={isDark ? "#6B7280" : "#9CA3AF"}
                 strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeDasharray="2 4"
               />
             )}
+            <Line
+              type="monotone"
+              dataKey={baseline.id}
+              stroke={baselineColor}
+              strokeWidth={2.5}
+              strokeDasharray="10 4"
+              dot={false}
+              isAnimationActive={false}
+            />
             {ais.map((ai, i) => (
               <Line
                 key={ai.id}

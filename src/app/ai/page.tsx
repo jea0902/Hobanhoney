@@ -3,7 +3,12 @@ import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import AiTradersSection from "@/components/home/AiTradersSection";
 import AiBalanceChart from "@/components/ai/AiBalanceChart";
-import { AI_TRADERS, getEquityTimeline, getMonthlyReturnsByAi } from "@/lib/aiInvestors";
+import {
+  AI_TRADERS,
+  getEquityTimeline,
+  getMonthlyReturnsByAi,
+  NASDAQ_BASELINE,
+} from "@/lib/aiInvestors";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +36,11 @@ export default async function AiPage() {
           </h1>
           <p className="mb-4 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
             모두 2026-03-06부터 매월 10일 100만원씩 똑같이 입금. 잔액은 회색 점선(누적 입금), 누적
-            손익·수익률은 0 기준선보다 위면 번 것, 아래면 잃은 것.
+            손익·수익률은 0 기준선보다 위면 번 것, 아래면 잃은 것. 회색 긴 점선은 같은 돈으로
+            나스닥100(QQQ)만 매월 사 모았을 때로, 이보다 위면 지수 적립보다 나은 것.
           </p>
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <AiBalanceChart ais={ais} rows={timeline} />
+            <AiBalanceChart ais={ais} baseline={NASDAQ_BASELINE} rows={timeline} />
           </div>
 
           <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
