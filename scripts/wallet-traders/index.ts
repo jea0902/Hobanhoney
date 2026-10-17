@@ -6,6 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import { getResult } from "../../src/lib/positionMath.ts";
 import { WALLET_TRADERS } from "../../src/lib/walletTraderList.ts";
 
+const INITIAL_TRADES = 50;
+
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 interface Fill {
@@ -152,13 +154,13 @@ async function syncTrader(name: string, address: string) {
     }
   }
 
-  for (let i = 0; i < closed.length; i += 500) {
-    const { error } = await supabase
-      .from("wallet_trades")
-      .upsert(closed.slice(i, i + 500), {
-        onConflict: "trader_name,opened_at,coin",
-        ignoreDuplicates: true,
-      });
+  // 처음 수집할 땐 받을 수 있는 기록 중 최근 완료 포지션 50건만 넣고(사용자 결정 2026-10-17), 이후로는 전부 쌓는다.
+  const toSave = sync ? closed : closed.slice(-INITIAL_TRADES);
+  for (let i = 0; i < toSave.length; i += 500) {
+    const { error } = await supabase.from("wallet_trades").upsert(toSave.slice(i, i + 500), {
+      onConflict: "trader_name,opened_at,coin",
+      ignoreDuplicates: true,
+    });
     if (error) throw error;
   }
   const { error } = await supabase.from("wallet_sync").upsert({
@@ -168,7 +170,7 @@ async function syncTrader(name: string, address: string) {
   });
   if (error) throw error;
   console.log(
-    `${name}: 종료된 포지션 ${closed.length}건 기록, 진행 중 ${Object.keys(open).join(", ") || "없음"}`,
+    `${name}: 종료된 포지션 ${toSave.length}건 기록, 진행 중 ${Object.keys(open).join(", ") || "없음"}`,
   );
 }
 

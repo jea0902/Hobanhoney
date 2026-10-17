@@ -7,9 +7,6 @@ import type { Direction, PositionRow, Result } from "@/types/position";
 
 export { WALLET_TRADERS };
 
-// 기록 페이지·홈 승률에 쓰는 최근 종료 포지션 수 (사용자 요청 2026-10-17)
-const RECENT_TRADES = 100;
-
 interface WalletTradeRow {
   id: string;
   coin: string;
@@ -42,8 +39,7 @@ export async function getWalletTraderRows(name: string): Promise<PositionRow[]> 
         "id, coin, direction, entry_price, max_size, leverage, result, result_pnl_percent, opened_at, closed_at",
       )
       .eq("trader_name", name)
-      .order("closed_at", { ascending: false })
-      .limit(RECENT_TRADES),
+      .order("closed_at", { ascending: false }),
     supabase.from("wallet_sync").select("open_positions").eq("trader_name", name).maybeSingle(),
   ]);
 
