@@ -82,7 +82,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
     summaries.map((s) => ({ id: s.meta.id, annualReturn: s.annualReturn })),
   ).get(params.id)!;
   const { meta, equity, holdings, trades } = detail;
-  const isFutures = meta.id === "hobanhoney" || meta.id === "wonyotti";
+  const isFutures = meta.id === "hobanhoney" || meta.id === "wonyotti" || meta.id === "martin";
 
   const latest = equity.at(-1);
   const returnPercent = latest ? annualReturnPercent(latest, lastYearEndOf(equity, latest)) : null;
