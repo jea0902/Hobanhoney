@@ -49,7 +49,7 @@ export const MAKER_FEE = 0.0002;
 export const MAINTENANCE_MARGIN = 0.005;
 
 // ---- AI 마틴 (BTC 추세추종 + 마틴게일 + 켈리) ----
-export const MARTIN_LEVERAGE = 10; // 20배 → 10배 → 5배 → 10배 (2026-10-18 사용자 결정)
+export const MARTIN_LEVERAGE = 5; // 20배 → 10배 → 5배 → 10배 → 5배 (2026-10-18 사용자 결정)
 // 켈리 비율을 시작 전 매매 기록으로 구하려고 Bybit BTCUSDT 선물 상장(2020-03) 무렵부터 받는다.
 export const MARTIN_HISTORY_FROM = "2020-01-01";
 // 켈리가 불리하다고 나와도(또는 기록이 모자라도) 매매는 하되 계좌의 1%로만 들어간다.
