@@ -23,7 +23,7 @@ export default function AiEquityChart({ equity }: { equity: AiEquity[] }) {
     invested: row.invested,
     withdrawn: row.withdrawn,
   }));
-  // 출금하는 AI(워뇨띠)만 누적 출금 선을 그린다 — 총자산이 줄어든 게 손실이 아니라 챙긴 돈임을 보여준다
+  // 출금하는 AI가 있을 때만(2026-10-17 워뇨띠 출금 규칙을 없애 지금은 없음) 누적 출금 선을 그린다 — 총자산이 줄어든 게 손실이 아니라 챙긴 돈임을 보여준다
   const hasWithdrawals = equity.some((row) => row.withdrawn > 0);
   const tickColor = isDark ? "#6B7280" : "#9CA3AF";
   const equityColor = isDark ? "#60A5FA" : "#3182F6";

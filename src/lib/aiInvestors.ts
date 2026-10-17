@@ -29,11 +29,10 @@ export const AI_TRADERS: AiMeta[] = [
       "최근 4시간 가격 범위의 아래 1/3에서 롱, 위 1/3에서 숏",
       "2분할 진입: 자산의 25%씩, 두 번째는 첫 진입가에서 0.3%(ETH 0.4%)",
       "익절 +0.6%(ETH +1.15%), 손절 -3.2%(ETH -7.8%), 8시간(ETH 10시간) 지나면 정리, 청산 후 12시간(ETH 48시간) 휴식",
-      "입출금: 시작 600만원 이후 추가 입금 없음, 매월 10일 직전 출금 뒤 이익이 났고 자산이 고점 근처(-5% 이내)면 그 이익의 60%를 출금",
-      "단타 숫자는 워뇨띠의 2018~2021 BitMEX 실제 체결 기록에서, 기본 포지션·거래량 조건·2분할은 본인의 100문 100답에서, 입출금은 지갑 기록과 100문 100답에서 가져옴",
+      "단타 숫자는 워뇨띠의 2018~2021 BitMEX 실제 체결 기록에서, 기본 포지션·거래량 조건·2분할은 본인의 100문 100답에서 가져옴",
     ],
     note:
-      "워뇨띠가 600만원으로 시작했다는 이야기대로, 다른 AI와 달리 2026-03-06에 600만원을 한 번만 입금하고 Bybit 1시간봉으로 체결했다고 가정함 " +
+      "2026-03-06에 0원으로 시작해 매월 10일 100만원씩 입금해서 Bybit 1시간봉으로 체결했다고 가정함 " +
       "(지정가 체결 수수료 0.02%·손절과 시간 정리 0.055%, 펀딩비 미반영, 한 봉 안에서는 불리한 가격이 먼저 닿았다고 가정, 매일 오전 7시 30분에 업데이트)",
   },
   {
@@ -124,7 +123,7 @@ export interface AiEquity {
   cash: number;
   equity: number;
   invested: number;
-  withdrawn: number; // 누적 출금. AI 워뇨띠만 출금하고 나머지는 0
+  withdrawn: number; // 누적 출금. 지금은 모든 AI가 0 (2026-10-17 워뇨띠 출금 규칙 제거)
 }
 
 export interface AiTrade {
@@ -360,6 +359,33 @@ export async function getMonthlyReturnsByAi() {
     for (const ai of perAi) {
       row[ai.id] = ai.months.find((m) => m.month === month)?.returnPercent ?? null;
     }
+    return row;
+  });
+}
+
+// AI 탭 잔액 추이 그래프용: 날짜마다 AI별 총자산과 누적 입금.
+// AI마다 기록 날짜가 달라서(미국·한국 거래일, 코인은 매일) 기록이 없는 날은 직전 값을 이어 쓴다.
+// 모든 AI가 같은 날 같은 금액을 입금하므로 누적 입금은 하나만 그린다(환율 차이로 조금씩 달라서 가장 큰 값).
+export async function getEquityTimeline() {
+  const perAi = await Promise.all(
+    AI_TRADERS.map(async (meta) => ({
+      id: meta.id,
+      byDate: new Map((await getEquityRows(meta.id)).map((row) => [row.date, row])),
+    })),
+  );
+  const dates = [...new Set(perAi.flatMap((ai) => [...ai.byDate.keys()]))].sort();
+  const last = new Map<string, AiEquity>();
+  return dates.map((date) => {
+    const row: Record<string, string | number | null> = { date };
+    let invested = 0;
+    for (const ai of perAi) {
+      const today = ai.byDate.get(date);
+      if (today) last.set(ai.id, today);
+      const latest = last.get(ai.id);
+      row[ai.id] = latest ? latest.equity : null;
+      invested = Math.max(invested, latest?.invested ?? 0);
+    }
+    row.invested = invested;
     return row;
   });
 }
