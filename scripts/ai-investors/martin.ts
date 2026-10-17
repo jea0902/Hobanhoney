@@ -1,8 +1,9 @@
 // AI 마틴: BTC 변동성 수축 후 돌파 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
 // 일봉 종가가 200일선 위면 롱만, 아래면 숏만. 4시간봉 볼린저밴드가 좁아졌다가 그 방향으로 밴드를 뚫으면 10배로 진입한다.
 // 일봉은 200일선만 보고, 나머지(밴드·진입·종료)는 전부 4시간봉 기준 (2026-10-18 사용자 정정).
-// 종료는 두 가지뿐: 4시간봉 종가가 4시간봉 20선(볼린저 중심선)을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
-// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 20선 종료면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// 종료는 두 가지뿐: 4시간봉 종가가 4시간봉 50선(50봉 단순평균)을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
+// (10/18: 20선은 큰 추세 중 짧은 조정에도 깨져서 50선으로, 마틴은 강제청산만이 아니라 손실 종료 전부로 — 사용자 결정)
+// 1회차 증거금은 쿼터 켈리, 손실로 끝나면(강제청산 포함, 수수료 포함 손익 기준) 다음 회차는 직전의 2배, 이익이면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
 // (처음 규칙은 주봉·일봉 이평선 정렬 + 4시간봉 20/50선 크로스였으나 매매가 너무 적고 추세 초입을 놓쳐서 바꿈)
 import {
   DEPOSIT_DAY,
@@ -32,6 +33,7 @@ const BAND_WIDTH = 2;
 const SQUEEZE_LOOKBACK = 1080;
 const SQUEEZE_QUANTILE = 0.2;
 const SQUEEZE_RECENT = 6;
+const EXIT_BARS = 50;
 
 interface Ema {
   length: number;
@@ -162,6 +164,7 @@ export async function runMartin(market: Market) {
     const upper = middle + BAND_WIDTH * deviation;
     const lower = middle - BAND_WIDTH * deviation;
     widths.push((upper - lower) / middle);
+    const exitLine = mean(closes.slice(-EXIT_BARS));
 
     // 10일 00:00 입금이 9일 마지막 봉에 들어가 9일 기록으로 찍히지 않게, 그 시각이 지난 봉에서 넣는다 (AI 워뇨띠와 같음)
     while (deposits.length > 0 && deposits[0] < closeTime) {
@@ -173,9 +176,9 @@ export async function runMartin(market: Market) {
     if (position) {
       const p = position;
       const liquidationPrice = p.entryPrice * (1 - p.direction * LIQUIDATION_MOVE);
-      // 한 봉 안의 순서는 알 수 없어서 강제청산을 20선 종료보다 먼저 본다
+      // 한 봉 안의 순서는 알 수 없어서 강제청산을 50선 종료보다 먼저 본다
       const liquidated = p.direction > 0 ? low <= liquidationPrice : high >= liquidationPrice;
-      const crossedBack = p.direction > 0 ? close < middle : close > middle;
+      const crossedBack = p.direction > 0 ? close < exitLine : close > exitLine;
       if (liquidated || crossedBack) {
         const exitPrice = liquidated ? liquidationPrice : close;
         const exitFee = liquidated ? 0 : p.quantity * exitPrice * FUTURES_FEE;
@@ -189,11 +192,13 @@ export async function runMartin(market: Market) {
 
         if (p.margin > 0) {
           cash += liquidated ? 0 : positionValue(p, exitPrice) - exitFee;
-          const nextRound = liquidated ? round + 1 : 1;
+          const entryFee = p.quantity * p.entryPrice * FUTURES_FEE;
+          const lost = pnl - entryFee - exitFee < 0;
+          const nextRound = lost ? round + 1 : 1;
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
-            : `4시간봉 종가가 20선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
-          const next = liquidated ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
+            : `4시간봉 종가가 50선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+          const next = lost ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
           record(
             closeTime,
             p.direction > 0 ? "sell" : "cover",
