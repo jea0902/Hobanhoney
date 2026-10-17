@@ -1,6 +1,7 @@
 import { getYahooQuote } from "@/lib/yahooFinance";
 import type { YahooQuote } from "@/lib/yahooFinance";
 import { getCryptoFearGreed } from "@/lib/alternativeMe";
+import { getBtcDominance } from "@/lib/coingecko";
 import {
   getFedFundsRate,
   getCpiYoy,
@@ -67,6 +68,7 @@ export default async function KeyIndicators() {
     nonfarmPayroll,
     unemploymentRate,
     creditSpread,
+    btcDominance,
   ] = await Promise.all([
     getYahooQuote("^VIX"),
     getYahooQuote("DX-Y.NYB"),
@@ -78,6 +80,7 @@ export default async function KeyIndicators() {
     getNonfarmPayrollChange(),
     getUnemploymentRate(),
     getCreditSpread(),
+    getBtcDominance(),
   ]);
 
   const percentPoint = (d: number) => `${d >= 0 ? "+" : ""}${d.toFixed(2)}%p`;
@@ -93,6 +96,13 @@ export default async function KeyIndicators() {
             ? `${fearGreed.changeFromYesterday >= 0 ? "+" : ""}${fearGreed.changeFromYesterday}`
             : "",
           up: fearGreed ? fearGreed.changeFromYesterday >= 0 : true,
+        },
+        {
+          label: "비트코인 도미넌스",
+          value: btcDominance === null ? "—" : `${btcDominance.toFixed(2)}%`,
+          delta: "",
+          up: true,
+          hint: "내려가면 알트코인으로 돈이 옮겨가는 신호",
         },
       ],
     },
@@ -152,7 +162,9 @@ export default async function KeyIndicators() {
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[11px] text-gray-400">출처: Yahoo Finance, FRED, alternative.me</p>
+      <p className="mt-3 text-[11px] text-gray-400">
+        출처: Yahoo Finance, FRED, alternative.me, CoinGecko
+      </p>
     </div>
   );
 }

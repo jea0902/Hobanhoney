@@ -68,7 +68,10 @@ async function fetchFillsSince(address: string, startTime: number) {
     start = unique.size === before ? lastTime + 1 : lastTime;
     await sleep(2_000);
   }
-  return [...unique.values()].sort((a, b) => a.time - b.time || a.tid - b.tid);
+  // 같은 밀리초 체결은 체결 번호가 실제 순서와 달라서(받아본 4만 건 중 94%가 어긋남), 수량이 이어지는 순서로 놓는다:
+  // 매수는 직전 수량이 작은 것부터, 매도는 큰 것부터.
+  const chainOrder = (f: Fill) => (f.side === "B" ? 1 : -1) * Number(f.startPosition);
+  return [...unique.values()].sort((a, b) => a.time - b.time || chainOrder(a) - chainOrder(b));
 }
 
 const leverageCache = new Map<string, number>();
@@ -134,13 +137,25 @@ async function syncTrader(name: string, address: string) {
     const after = before + size;
     let state: OpenState | undefined = open[fill.coin];
 
-    // 추적 중인 수량과 체결 직전 수량이 다르면 중간 체결이 빠졌다는 뜻 → 이 포지션은 믿을 수 없으니 버리고 다시 0부터 센다.
+    // 추적 수량과 체결 직전 수량이 다르면 API가 일부 체결을 안 준 것 (분할 자동 주문 등으로 추정, 4만 건 중 19번).
+    // 같은 방향이면 거래소 수량으로 맞추고 늘어난 만큼은 이 체결 가격에 산 것으로 근사, 방향까지 어긋나면 버린다.
     if (state && !isZero(before - state.size, before)) {
-      console.log(
-        `${name}: ${fill.coin} 체결 누락 감지, 진행 중 포지션 버림 (${state.size} → ${before})`,
-      );
-      delete open[fill.coin];
-      state = undefined;
+      const sameDirection = !isZero(before, state.size) && before > 0 === state.size > 0;
+      if (sameDirection) {
+        const added = Math.abs(before) - Math.abs(state.size);
+        if (added > 0) {
+          state.entryCost += Number(fill.px) * added;
+          state.entrySize += added;
+          state.maxSize = Math.max(state.maxSize, Math.abs(before));
+        }
+        state.size = before;
+      } else {
+        console.log(
+          `${name}: ${fill.coin} 수량이 이어지지 않아 진행 중 포지션 버림 (${state.size} → ${before})`,
+        );
+        delete open[fill.coin];
+        state = undefined;
+      }
     }
 
     if (!state) {
