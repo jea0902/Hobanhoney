@@ -22,6 +22,7 @@ export const AI_IDS = [
   "hobanhoney",
   "wonyotti",
   "martin",
+  "port",
 ] as const;
 export type AiId = (typeof AI_IDS)[number];
 
@@ -48,9 +49,10 @@ export const FUTURES_FEE = 0.00055;
 export const MAKER_FEE = 0.0002;
 export const MAINTENANCE_MARGIN = 0.005;
 
-// ---- AI 마틴 (BTC 추세추종 + 마틴게일 + 켈리) ----
+// ---- AI 마틴 (BTC 추세추종 + 마틴게일) ----
 export const MARTIN_LEVERAGE = 5; // 20배 → 10배 → 5배 → 10배 → 5배 (2026-10-18 사용자 결정)
-// 켈리 비율을 시작 전 매매 기록으로 구하려고 Bybit BTCUSDT 선물 상장(2020-03) 무렵부터 받는다.
+// 200일선·볼린저 폭 분위를 시작일 전부터 계산하려고 Bybit BTCUSDT 선물 상장(2020-03) 무렵부터 받는다.
 export const MARTIN_HISTORY_FROM = "2020-01-01";
-// 켈리가 불리하다고 나와도(또는 기록이 모자라도) 매매는 하되 계좌의 1%로만 들어간다.
-export const MARTIN_MIN_RATIO = 0.01;
+// 1회차 증거금은 계좌의 1%, 손실로 끝나면 다음 회차는 직전의 1.5배 (2026-10-18 사용자 결정 — 쿼터 켈리·2배에서 변경)
+export const MARTIN_FIRST_RATIO = 0.01;
+export const MARTIN_MULTIPLIER = 1.5;

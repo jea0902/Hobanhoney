@@ -6,7 +6,7 @@ import { runBurry } from "./burry.ts";
 import { runBuffett } from "./buffett.ts";
 import type { AiId } from "./config.ts";
 import { DRY_RUN, logEvent, replaceRows } from "./db.ts";
-import { runFearGreed, runKoreanAnt, runWallstreet } from "./funds.ts";
+import { runFearGreed, runKoreanAnt, runPort, runWallstreet } from "./funds.ts";
 import { runHobanhoney } from "./hobanhoney.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import { loadAndRefreshMarket } from "./market.ts";
@@ -48,6 +48,7 @@ async function main() {
     runFearGreed(market, usToday),
     runBuffett(market, usToday),
     runBurry(market, usToday),
+    runPort(market, usToday),
   ]) {
     const today = ledger.ai === "korean_ant" ? krToday : usToday;
     await save({

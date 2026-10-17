@@ -1,6 +1,7 @@
-// ETF로 운용하는 AI 3명: 월가, 한국개미, 공포탐욕
+// ETF로 운용하는 AI 4명: 월가, 한국개미, 공포탐욕, 포트
 import { START, STOCK_FEE } from "./config.ts";
 import { Ledger, depositDays } from "./ledger.ts";
+import { addDays } from "./market.ts";
 import type { Market } from "./market.ts";
 
 type Weights = Record<string, number>;
@@ -191,6 +192,46 @@ export function runFearGreed(market: Market, today: string) {
       );
       soldRatio += 0.2;
       lastSellIndex = i;
+    }
+    ledger.record(day);
+  });
+  return ledger;
+}
+
+// AI 포트: 나스닥100(QQQ) 40 · S&P500(SPY) 20 · 미국 중기국채(IEF) 20 · 금(GLD) 10 · 비트코인 현물 10 (2026-10-18 사용자 설계).
+// 매월 입금일에 자산마다 200일선 위면 목표 비중만큼 담고, 아래면 그 몫은 현금(단기국채 금리)으로 둔 채 전체를 리밸런싱한다.
+// 한 달 사이에 200일선을 깨도 다음 입금일까지 기다린다 — 매일 점검은 백테스트에서 매매만 늘고 결과가 더 나빴다.
+// 백테스트(2005~2026, 세금 전): 연 12.2%·최대 하락 15.9% vs 나스닥100 적립 15.2%·53.4% (TODO.md 33번).
+const PORT_WEIGHTS: Weights = { QQQ: 0.4, SPY: 0.2, IEF: 0.2, GLD: 0.1, "BTC-USD": 0.1 };
+
+function aboveMovingAverage(market: Market, symbol: string, day: string) {
+  // 비트코인은 주말에도 거래돼서 날짜가 아니라 그 자산의 마지막 200개 종가로 계산한다
+  const closes = market.closesBetween(symbol, addDays(day, -400), day).slice(-200);
+  return closes.at(-1)! > closes.reduce((sum, c) => sum + c, 0) / closes.length;
+}
+
+export function runPort(market: Market, today: string) {
+  const ledger = new Ledger("port", market);
+  const days = market.tradingDays("SPY", START, today);
+  const deposits = depositDays(days);
+  days.forEach((day, i) => {
+    if (i > 0) ledger.startDay(day, days[i - 1]); // 배당은 현금으로 쌓였다가 다음 입금 때 같이 배분된다
+    if (deposits.has(day)) {
+      ledger.deposit(day);
+      const below = Object.keys(PORT_WEIGHTS).filter(
+        (symbol) => !aboveMovingAverage(market, symbol, day),
+      );
+      const weights = Object.fromEntries(
+        Object.entries(PORT_WEIGHTS).map(([symbol, weight]) => [
+          symbol,
+          below.includes(symbol) ? 0 : weight,
+        ]),
+      );
+      const reason =
+        below.length === 0
+          ? "매월 리밸런싱 (전부 200일선 위)"
+          : `매월 리밸런싱 (200일선 아래라 현금으로: ${below.join(", ")})`;
+      rebalanceTo(ledger, market, weights, day, reason);
     }
     ledger.record(day);
   });

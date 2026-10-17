@@ -1,9 +1,10 @@
-// AI 마틴: BTC 변동성 수축 후 돌파 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
+// AI 마틴: BTC 변동성 수축 후 돌파 추세추종 + 마틴게일 (2026-10-17 사용자 설계).
 // 일봉 종가가 200일선 위면 롱만, 아래면 숏만. 4시간봉 볼린저밴드가 좁아졌다가 그 방향으로 밴드를 뚫으면 5배로 진입한다.
 // 일봉은 200일선만 보고, 나머지(밴드·진입·종료)는 전부 4시간봉 기준 (2026-10-18 사용자 정정).
 // 종료는 두 가지뿐: 4시간봉 종가가 4시간봉 50선(50봉 단순평균)을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
 // (10/18: 20선은 큰 추세 중 짧은 조정에도 깨져서 50선으로, 마틴은 강제청산만이 아니라 손실 종료 전부로 — 사용자 결정)
-// 1회차 증거금은 쿼터 켈리, 손실로 끝나면(강제청산 포함, 수수료 포함 손익 기준) 다음 회차는 직전의 2배, 이익이면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// 1회차 증거금은 계좌의 1%, 손실로 끝나면(강제청산 포함, 수수료 포함 손익 기준) 다음 회차는 직전의 1.5배, 이익이면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// (10/18: 쿼터 켈리는 기록이 적어 흔들리고 같은 신호로 켈리만 쓰면 손실이라 빼고, 2배는 연패 때 계좌 절반까지 묶여서 1.5배로)
 // (처음 규칙은 주봉·일봉 이평선 정렬 + 4시간봉 20/50선 크로스였으나 매매가 너무 적고 추세 초입을 놓쳐서 바꿈)
 import {
   DEPOSIT_DAY,
@@ -12,7 +13,8 @@ import {
   MAINTENANCE_MARGIN,
   MARTIN_HISTORY_FROM,
   MARTIN_LEVERAGE,
-  MARTIN_MIN_RATIO,
+  MARTIN_FIRST_RATIO,
+  MARTIN_MULTIPLIER,
   START,
 } from "./config.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
@@ -45,7 +47,7 @@ interface Position {
   direction: 1 | -1;
   entryPrice: number;
   quantity: number;
-  margin: number; // 0이면 시작 전 매매 — 계좌엔 반영하지 않고 켈리 계산용 기록만 남긴다
+  margin: number; // 0이면 시작 전 매매 — 계좌엔 반영하지 않고, 시작일에 신호 상태(포지션 중인지)를 이어 받는 데만 쓴다
   openedAt: number;
 }
 
@@ -72,19 +74,6 @@ function mean(values: number[]) {
 function quantile(values: number[], q: number) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(q * (sorted.length - 1))];
-}
-
-// 지금까지 끝난 매매(증거금 대비 수익률)로 구한 쿼터 켈리. 계좌 대비 1회차 증거금 비율.
-// 매매 기록이 수십 건뿐이라 켈리를 그대로 쓰면 과하게 나와서(하프 켈리로 1회차가 계좌의 7%) 1/4만 쓴다.
-function kelly(returns: number[]) {
-  const wins = returns.filter((r) => r > 0);
-  const losses = returns.filter((r) => r <= 0);
-  if (wins.length === 0 || losses.length === 0)
-    return { ratio: MARTIN_MIN_RATIO, winRate: 0, payoff: 0 };
-  const winRate = wins.length / returns.length;
-  const payoff = mean(wins) / -mean(losses);
-  const quarter = (winRate - (1 - winRate) / payoff) / 4;
-  return { ratio: Math.max(MARTIN_MIN_RATIO, quarter), winRate, payoff };
 }
 
 export async function runMartin(market: Market) {
@@ -124,7 +113,6 @@ export async function runMartin(market: Market) {
   let baseMargin = 0;
   let position: Position | null = null;
   let lastClose = 0;
-  const returns: number[] = [];
   const trades: TradeRow[] = [];
   const equity: EquityRow[] = [];
 
@@ -183,11 +171,6 @@ export async function runMartin(market: Market) {
         const exitPrice = liquidated ? liquidationPrice : close;
         const exitFee = liquidated ? 0 : p.quantity * exitPrice * FUTURES_FEE;
         const pnl = liquidated ? -p.margin : p.direction * p.quantity * (exitPrice - p.entryPrice);
-        // 증거금 대비 수익률은 증거금 크기와 상관없어서, 시작 전 매매(증거금 0)도 같은 식으로 구한다
-        const move = p.direction * (exitPrice / p.entryPrice - 1);
-        returns.push(
-          liquidated ? -1 : MARTIN_LEVERAGE * (move - FUTURES_FEE * (1 + exitPrice / p.entryPrice)),
-        );
         position = null;
 
         if (p.margin > 0) {
@@ -198,7 +181,7 @@ export async function runMartin(market: Market) {
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
             : `4시간봉 종가가 50선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
-          const next = lost ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
+          const next = lost ? `다음은 ${nextRound}회차 (증거금 1.5배)` : "다음은 1회차";
           record(
             closeTime,
             p.direction > 0 ? "sell" : "cover",
@@ -231,25 +214,20 @@ export async function runMartin(market: Market) {
         let margin = 0;
         let reason = "";
         if (closeTime >= from) {
-          const k = kelly(returns);
           let note = "";
-          if (round === 1) baseMargin = k.ratio * cash;
-          margin = baseMargin * 2 ** (round - 1);
+          if (round === 1) baseMargin = MARTIN_FIRST_RATIO * cash;
+          margin = baseMargin * MARTIN_MULTIPLIER ** (round - 1);
           // 진입 수수료까지 현금으로 낼 수 있어야 한다
           if (margin * (1 + MARTIN_LEVERAGE * FUTURES_FEE) > cash) {
-            note = `, ${round}회차 증거금 $${margin.toFixed(2)}를 계좌가 못 버텨 1회차로 리셋`;
+            note = ` (${round}회차 증거금 $${margin.toFixed(2)}를 계좌가 못 버텨 1회차로 리셋)`;
             round = 1;
-            baseMargin = k.ratio * cash;
+            baseMargin = MARTIN_FIRST_RATIO * cash;
             margin = baseMargin;
           }
           if (margin < 1) margin = 0;
-          const kellyText =
-            k.winRate > 0
-              ? `켈리: 승률 ${(k.winRate * 100).toFixed(0)}%·손익비 ${k.payoff.toFixed(2)} → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`
-              : `켈리 계산할 기록 부족 → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`;
           reason =
             `일봉 200일선 ${direction > 0 ? "위" : "아래"}, 좁아진 4시간봉 볼린저밴드 ${direction > 0 ? "상단" : "하단"} 돌파, ` +
-            `${round}회차 증거금 $${margin.toFixed(2)} (${kellyText}${note})`;
+            `${round}회차 증거금 $${margin.toFixed(2)}${note}`;
         }
 
         position = {
