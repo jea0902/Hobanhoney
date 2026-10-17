@@ -1,7 +1,7 @@
 // AI 마틴: BTC 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
 // 방향은 주봉 20/50선·일봉 50/200선이 같은 쪽일 때만 정하고, 그 방향으로 4시간봉 20선이 50선을 뚫을 때 20배로 진입한다.
 // 일봉 종가가 50일선을 반대로 2일 연속 넘으면 추세가 끝난 걸로 보고 나온다.
-// 1회차 증거금은 하프 켈리, 손실로 끝나면 다음 회차는 직전의 2배, 이익이면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// 1회차 증거금은 하프 켈리, 강제청산되면 다음 회차는 직전의 2배, 추세 종료로 나오면 손익과 상관없이 1회차로 (2026-10-17 사용자 결정). 다음 회차를 계좌가 못 버티면 1회차로 리셋.
 import {
   DEPOSIT_DAY,
   DEPOSIT_KRW,
@@ -177,7 +177,6 @@ export async function runMartin(market: Market) {
       const trendBroken = isDayEnd && (p.direction > 0 ? daysBelow >= 2 : daysAbove >= 2);
       if (liquidated || trendBroken) {
         const exitPrice = liquidated ? liquidationPrice : close;
-        const entryFee = p.quantity * p.entryPrice * FUTURES_FEE;
         const exitFee = liquidated ? 0 : p.quantity * exitPrice * FUTURES_FEE;
         const pnl = liquidated ? -p.margin : p.direction * p.quantity * (exitPrice - p.entryPrice);
         // 증거금 대비 수익률은 증거금 크기와 상관없어서, 시작 전 매매(증거금 0)도 같은 식으로 구한다
@@ -189,12 +188,11 @@ export async function runMartin(market: Market) {
 
         if (p.margin > 0) {
           cash += liquidated ? 0 : positionValue(p, exitPrice) - exitFee;
-          const net = pnl - entryFee - exitFee;
-          const nextRound = net < 0 ? round + 1 : 1;
+          const nextRound = liquidated ? round + 1 : 1;
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
             : `일봉 종가가 50일선 ${p.direction > 0 ? "아래" : "위"}로 2일 연속 → 추세 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
-          const next = net < 0 ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
+          const next = liquidated ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
           record(
             closeTime,
             p.direction > 0 ? "sell" : "cover",
