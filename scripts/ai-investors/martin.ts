@@ -1,8 +1,8 @@
-// AI 마틴: BTC 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
-// 방향은 주봉 20/50선·일봉 50/200선이 같은 쪽일 때만 정하고, 그 방향으로 4시간봉 20선이 50선을 뚫을 때 10배로 진입한다.
-// 일봉 종가가 20일선을 반대로 2일 연속 넘으면 추세가 끝난 걸로 보고 나온다.
-// (처음엔 50일선이었으나 매매가 5.6년에 25번뿐이라 켈리 표본이 너무 적어 20일선으로 바꿈 — 2026-10-17 사용자 결정)
-// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 추세 종료로 나오면 손익과 상관없이 1회차로 (2026-10-17 사용자 결정). 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// AI 마틴: BTC 변동성 수축 후 돌파 추세추종 + 마틴게일 + 켈리 (2026-10-17 사용자 설계).
+// 일봉 종가가 200일선 위면 롱만, 아래면 숏만. 4시간봉 볼린저밴드가 좁아졌다가 그 방향으로 밴드를 뚫으면 5배로 진입한다.
+// 종료는 두 가지뿐: 4시간봉 종가가 일봉 20일선을 반대로 넘을 때(손익과 상관없이), 그리고 강제청산.
+// 1회차 증거금은 쿼터 켈리, 강제청산되면 다음 회차는 직전의 2배, 20일선 종료면 1회차로. 다음 회차를 계좌가 못 버티면 1회차로 리셋.
+// (처음 규칙은 주봉·일봉 이평선 정렬 + 4시간봉 20/50선 크로스였으나 매매가 너무 적고 추세 초입을 놓쳐서 바꿈)
 import {
   DEPOSIT_DAY,
   DEPOSIT_KRW,
@@ -20,11 +20,17 @@ import { fetchCandles } from "./sources.ts";
 const HOUR_MS = 3_600_000;
 const FOUR_HOURS_MS = 4 * HOUR_MS;
 const DAY_MS = 24 * HOUR_MS;
-const WEEK_MS = 7 * DAY_MS;
 const KST_OFFSET_MS = 9 * HOUR_MS;
 const SYMBOL = "BTC/USDT";
 // 격리 마진 기준: 증거금(1/레버리지)에서 유지증거금을 뺀 만큼 불리하게 움직이면 강제청산 (AI 호반꿀과 같음)
 const LIQUIDATION_MOVE = 1 / MARTIN_LEVERAGE - MAINTENANCE_MARGIN;
+// 볼린저밴드 표준값: 4시간봉 20개 평균 ± 표준편차 2배
+const BAND_BARS = 20;
+const BAND_WIDTH = 2;
+// "좁아졌다" = 밴드 폭이 최근 6개월(4시간봉 1,080개) 중 하위 20%. 그 상태가 최근 하루(6봉) 안에 있었으면 돌파를 인정한다.
+const SQUEEZE_LOOKBACK = 1080;
+const SQUEEZE_QUANTILE = 0.2;
+const SQUEEZE_RECENT = 6;
 
 interface Ema {
   length: number;
@@ -60,6 +66,11 @@ function mean(values: number[]) {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+function quantile(values: number[], q: number) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(q * (sorted.length - 1))];
+}
+
 // 지금까지 끝난 매매(증거금 대비 수익률)로 구한 쿼터 켈리. 계좌 대비 1회차 증거금 비율.
 // 매매 기록이 수십 건뿐이라 켈리를 그대로 쓰면 과하게 나와서(하프 켈리로 1회차가 계좌의 7%) 1/4만 쓴다.
 function kelly(returns: number[]) {
@@ -76,7 +87,7 @@ function kelly(returns: number[]) {
 export async function runMartin(market: Market) {
   const now = Date.now();
   const from = Date.parse(`${START}T00:00:00+09:00`);
-  // 일봉·주봉은 Bybit과 같은 UTC 경계로 4시간봉을 묶어서 만든다 (Bybit 일봉·주봉은 분 단위 간격으로 받을 수 없음).
+  // 일봉은 Bybit과 같은 UTC 경계로 4시간봉을 묶어서 만든다 (Bybit 일봉은 분 단위 간격으로 받을 수 없음).
   const candles = await fetchCandles(
     SYMBOL.replace("/", ""),
     Date.parse(`${MARTIN_HISTORY_FROM}T00:00:00Z`),
@@ -98,16 +109,12 @@ export async function runMartin(market: Market) {
     if (time >= from) deposits.push(time);
   }
 
-  const h20 = ema(20);
-  const h50 = ema(50);
   const d20 = ema(20);
-  const d50 = ema(50);
   const d200 = ema(200);
-  const w20 = ema(20);
-  const w50 = ema(50);
-  // 일봉 종가가 20일선 아래(위)에서 연속으로 마감한 날 수
-  let daysBelow = 0;
-  let daysAbove = 0;
+  // 마지막으로 끝난 일봉의 종가 (200일선 위·아래 판단용)
+  let dayClose = 0;
+  const closes: number[] = [];
+  const widths: number[] = [];
 
   let cash = 0;
   let invested = 0;
@@ -148,23 +155,13 @@ export async function runMartin(market: Market) {
     const { high, low, close } = candle;
     lastClose = close;
 
-    const before20 = h20.value;
-    const before50 = h50.value;
-    update(h20, close);
-    update(h50, close);
-    const isDayEnd = closeTime % DAY_MS === 0;
-    if (isDayEnd) {
-      update(d20, close);
-      update(d50, close);
-      update(d200, close);
-      daysBelow = close < d20.value ? daysBelow + 1 : 0;
-      daysAbove = close > d20.value ? daysAbove + 1 : 0;
-    }
-    // 1970-01-01은 목요일이라 4일을 빼면 월요일 00:00 (UTC) 경계가 된다
-    if ((closeTime - 4 * DAY_MS) % WEEK_MS === 0) {
-      update(w20, close);
-      update(w50, close);
-    }
+    closes.push(close);
+    const recent = closes.slice(-BAND_BARS);
+    const middle = mean(recent);
+    const deviation = Math.sqrt(mean(recent.map((c) => (c - middle) ** 2)));
+    const upper = middle + BAND_WIDTH * deviation;
+    const lower = middle - BAND_WIDTH * deviation;
+    widths.push((upper - lower) / middle);
 
     // 10일 00:00 입금이 9일 마지막 봉에 들어가 9일 기록으로 찍히지 않게, 그 시각이 지난 봉에서 넣는다 (AI 워뇨띠와 같음)
     while (deposits.length > 0 && deposits[0] < closeTime) {
@@ -176,10 +173,10 @@ export async function runMartin(market: Market) {
     if (position) {
       const p = position;
       const liquidationPrice = p.entryPrice * (1 - p.direction * LIQUIDATION_MOVE);
-      // 한 봉 안의 순서는 알 수 없어서 강제청산을 추세 종료보다 먼저 본다
+      // 한 봉 안의 순서는 알 수 없어서 강제청산을 20일선 종료보다 먼저 본다
       const liquidated = p.direction > 0 ? low <= liquidationPrice : high >= liquidationPrice;
-      const trendBroken = isDayEnd && (p.direction > 0 ? daysBelow >= 2 : daysAbove >= 2);
-      if (liquidated || trendBroken) {
+      const crossedBack = p.direction > 0 ? close < d20.value : close > d20.value;
+      if (liquidated || crossedBack) {
         const exitPrice = liquidated ? liquidationPrice : close;
         const exitFee = liquidated ? 0 : p.quantity * exitPrice * FUTURES_FEE;
         const pnl = liquidated ? -p.margin : p.direction * p.quantity * (exitPrice - p.entryPrice);
@@ -195,7 +192,7 @@ export async function runMartin(market: Market) {
           const nextRound = liquidated ? round + 1 : 1;
           const why = liquidated
             ? `강제청산 (증거금 $${p.margin.toFixed(2)} 손실)`
-            : `일봉 종가가 20일선 ${p.direction > 0 ? "아래" : "위"}로 2일 연속 → 추세 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+            : `4시간봉 종가가 일봉 20일선 ${p.direction > 0 ? "아래" : "위"}로 → 종료, 손익 ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
           const next = liquidated ? `다음은 ${nextRound}회차 (증거금 2배)` : "다음은 1회차";
           record(
             closeTime,
@@ -209,55 +206,61 @@ export async function runMartin(market: Market) {
       }
     }
 
-    const ready = w50.count >= 50 && d200.count >= 200 && h50.count >= 50;
-    const direction = !ready
-      ? 0
-      : w20.value > w50.value && d50.value > d200.value
-        ? 1
-        : w20.value < w50.value && d50.value < d200.value
-          ? -1
-          : 0;
-    const crossed =
-      direction > 0
-        ? before20 <= before50 && h20.value > h50.value
-        : direction < 0 && before20 >= before50 && h20.value < h50.value;
-    // 이미 추세 종료 조건에 걸려 있으면 들어가자마자 나오게 되니 쉰다
-    const broken = direction > 0 ? daysBelow >= 2 : daysAbove >= 2;
-    if (!position && direction !== 0 && crossed && !broken) {
-      let margin = 0;
-      let reason = "";
-      if (closeTime >= from) {
-        const k = kelly(returns);
-        let note = "";
-        if (round === 1) baseMargin = k.ratio * cash;
-        margin = baseMargin * 2 ** (round - 1);
-        // 진입 수수료까지 현금으로 낼 수 있어야 한다
-        if (margin * (1 + MARTIN_LEVERAGE * FUTURES_FEE) > cash) {
-          note = `, ${round}회차 증거금 $${margin.toFixed(2)}를 계좌가 못 버텨 1회차로 리셋`;
-          round = 1;
-          baseMargin = k.ratio * cash;
-          margin = baseMargin;
-        }
-        if (margin < 1) margin = 0;
-        const kellyText =
-          k.winRate > 0
-            ? `켈리: 승률 ${(k.winRate * 100).toFixed(0)}%·손익비 ${k.payoff.toFixed(2)} → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`
-            : `켈리 계산할 기록 부족 → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`;
-        reason =
-          `4시간봉 20선이 50선을 ${direction > 0 ? "위" : "아래"}로 돌파 (주봉·일봉 ${direction > 0 ? "상승" : "하락"} 추세), ` +
-          `${round}회차 증거금 $${margin.toFixed(2)} (${kellyText}${note})`;
-      }
+    // 일봉이 끝나는 봉에서 일봉 이평선을 갱신한다. 이 봉의 진입·종료 판단은 위에서 전날까지의 20일선으로 했다.
+    if (closeTime % DAY_MS === 0) {
+      update(d20, close);
+      update(d200, close);
+      dayClose = close;
+    }
 
-      position = {
-        direction,
-        entryPrice: close,
-        quantity: (margin * MARTIN_LEVERAGE) / close,
-        margin,
-        openedAt: closeTime,
-      };
-      if (margin > 0) {
-        cash -= margin + position.quantity * close * FUTURES_FEE;
-        record(closeTime, direction > 0 ? "buy" : "short", position.quantity, close, reason);
+    const ready = d200.count >= 200 && widths.length >= SQUEEZE_LOOKBACK;
+    if (!position && ready) {
+      const threshold = quantile(widths.slice(-SQUEEZE_LOOKBACK), SQUEEZE_QUANTILE);
+      const squeezed = widths.slice(-SQUEEZE_RECENT - 1, -1).some((w) => w <= threshold);
+      const direction =
+        dayClose > d200.value && close > upper
+          ? 1
+          : dayClose < d200.value && close < lower
+            ? -1
+            : 0;
+      // 이미 20일선 반대편이면 들어가자마자 나오게 되니 쉰다
+      const wrongSide = direction > 0 ? close < d20.value : close > d20.value;
+      if (squeezed && direction !== 0 && !wrongSide) {
+        let margin = 0;
+        let reason = "";
+        if (closeTime >= from) {
+          const k = kelly(returns);
+          let note = "";
+          if (round === 1) baseMargin = k.ratio * cash;
+          margin = baseMargin * 2 ** (round - 1);
+          // 진입 수수료까지 현금으로 낼 수 있어야 한다
+          if (margin * (1 + MARTIN_LEVERAGE * FUTURES_FEE) > cash) {
+            note = `, ${round}회차 증거금 $${margin.toFixed(2)}를 계좌가 못 버텨 1회차로 리셋`;
+            round = 1;
+            baseMargin = k.ratio * cash;
+            margin = baseMargin;
+          }
+          if (margin < 1) margin = 0;
+          const kellyText =
+            k.winRate > 0
+              ? `켈리: 승률 ${(k.winRate * 100).toFixed(0)}%·손익비 ${k.payoff.toFixed(2)} → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`
+              : `켈리 계산할 기록 부족 → 1회차는 계좌의 ${(k.ratio * 100).toFixed(1)}%`;
+          reason =
+            `일봉 200일선 ${direction > 0 ? "위" : "아래"}, 좁아진 4시간봉 볼린저밴드 ${direction > 0 ? "상단" : "하단"} 돌파, ` +
+            `${round}회차 증거금 $${margin.toFixed(2)} (${kellyText}${note})`;
+        }
+
+        position = {
+          direction,
+          entryPrice: close,
+          quantity: (margin * MARTIN_LEVERAGE) / close,
+          margin,
+          openedAt: closeTime,
+        };
+        if (margin > 0) {
+          cash -= margin + position.quantity * close * FUTURES_FEE;
+          record(closeTime, direction > 0 ? "buy" : "short", position.quantity, close, reason);
+        }
       }
     }
 
