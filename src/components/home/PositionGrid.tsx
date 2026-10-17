@@ -17,7 +17,7 @@ function getAvatarColor(name: string) {
   return AVATAR_COLORS[sum % AVATAR_COLORS.length];
 }
 
-// 진입 시각을 모르는 포지션(지갑 추적 트레이더)은 "—"
+// 진입 시각을 모르는 포지션(지갑 추적 트레이더의 수집 전 포지션)은 "—"
 function formatElapsed(createdAt: string) {
   if (!createdAt) return "—";
   const diffMs = Date.now() - new Date(createdAt).getTime();
@@ -189,25 +189,14 @@ function Avatar({ trader }: { trader: TraderGroup }) {
   );
 }
 
-// 기록 페이지가 있는 트레이더만 링크로 (지갑 추적 트레이더는 사이트 안에 기록이 없음)
 function TraderName({ trader }: { trader: TraderGroup }) {
-  const href = traderHref(trader.traderName);
-  const content = (
-    <>
+  return (
+    <Link href={traderHref(trader.traderName)} className="flex items-center gap-2">
       <Avatar trader={trader} />
-      <span
-        className={`text-base font-semibold text-gray-900 dark:text-gray-100 ${href ? "underline-offset-4 hover:underline" : ""}`}
-      >
+      <span className="text-base font-semibold text-gray-900 underline-offset-4 hover:underline dark:text-gray-100">
         {trader.traderName}
       </span>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="flex items-center gap-2">
-      {content}
     </Link>
-  ) : (
-    <div className="flex items-center gap-2">{content}</div>
   );
 }
 

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getSupabase } from "@/lib/supabase";
 import { AI_TRADERS } from "@/lib/aiInvestors";
 import { HIDDEN_TRADERS } from "@/lib/traderGroups";
+import { WALLET_TRADERS } from "@/lib/walletTraderList";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -17,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: siteUrl, changeFrequency: "always", priority: 1 },
     { url: `${siteUrl}/rankers`, changeFrequency: "hourly", priority: 0.8 },
-    ...traderNames.map((name) => ({
+    ...[...traderNames, ...WALLET_TRADERS.map((trader) => trader.name)].map((name) => ({
       url: `${siteUrl}/traders/${encodeURIComponent(name)}`,
       changeFrequency: "daily" as const,
       priority: 0.7,

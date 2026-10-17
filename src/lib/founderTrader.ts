@@ -3,7 +3,6 @@ import type { OwnerPosition } from "@/lib/bybitPrivate";
 import { getWinRateStats } from "@/lib/closedTrades";
 import type { TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
-import { WALLET_TRADERS } from "@/lib/walletTraders";
 
 // 운영자 본인을 홈 실시간 포지션에 유튜버와 같은 트레이더 한 명으로 보여준다.
 // 데이터는 positions 테이블이 아니라 Bybit 실계좌(읽기 전용 API)와 closed_trades에서 온다.
@@ -53,9 +52,9 @@ export async function getFounderTrader() {
   return { trader, markPrice: top?.currentPrice ?? null, positions: positions ?? [] };
 }
 
-// 홈 표에서 누르면 갈 곳. 최무상은 운영자 페이지(/founder), 지갑 추적 트레이더는 기록 페이지가 없어 링크 없음.
+// 홈 표에서 누르면 갈 곳. 최무상은 운영자 페이지(/founder), 나머지는 트레이더 기록 페이지.
 export function traderHref(traderName: string) {
-  if (traderName === FOUNDER_TRADER_NAME) return "/founder";
-  if (WALLET_TRADERS.some((trader) => trader.name === traderName)) return null;
-  return `/traders/${encodeURIComponent(traderName)}`;
+  return traderName === FOUNDER_TRADER_NAME
+    ? "/founder"
+    : `/traders/${encodeURIComponent(traderName)}`;
 }

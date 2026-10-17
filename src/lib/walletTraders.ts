@@ -1,56 +1,115 @@
+import { getSupabase } from "@/lib/supabase";
 import { getHyperliquidPositions } from "@/lib/hyperliquid";
-import type { HyperliquidPosition } from "@/lib/hyperliquid";
+import { getTraderStats } from "@/lib/traderGroups";
 import type { TraderGroup } from "@/lib/traderGroups";
-import type { PositionRow } from "@/types/position";
+import { WALLET_TRADERS } from "@/lib/walletTraderList";
+import type { Direction, PositionRow, Result } from "@/types/position";
 
-// 방송 화면이 아니라 하이퍼리퀴드 지갑 주소로 포지션을 실시간 추적하는 트레이더.
-// 지갑을 공개 API로 조회만 하므로 DB(positions)에 기록하지 않는다.
-export const WALLET_TRADERS = [
-  // 대만 가수 출신 코인 트레이더 (2026-10-17 추가)
-  { name: "제프리황", address: "0x020ca66c30bec2c4fe3861a94e4db4a498a35872", image: null },
-];
+export { WALLET_TRADERS };
 
-// 기존 트레이더 카드·표가 쓰는 PositionRow 형태로 바꾼다.
-// 하이퍼리퀴드 포지션 조회엔 진입 시각이 없고, 체결 기록도 최근 2,000건(제프리황은 약 하루 반)만 받을 수 있어
-// 진입 시각을 알 수 없다 → created_at을 비워 "경과"를 "—"로 보여준다.
-function toPositionRow(
-  name: string,
-  image: string | null,
-  position: HyperliquidPosition,
-): PositionRow {
-  return {
-    id: `wallet-${name}`,
-    type: "actual",
-    trader_name: name,
-    trader_image: image,
-    symbol: position.coin,
-    leverage: position.leverage,
-    quantity: position.quantity,
-    entry_price: position.entryPrice,
-    liquidation_price: null,
-    quote: null,
-    direction: position.direction,
-    result: null,
-    result_note: null,
-    result_pnl_percent: null,
-    result_recorded_at: null,
-    created_at: "",
-  };
+// 기록 페이지·홈 승률에 쓰는 최근 종료 포지션 수 (사용자 요청 2026-10-17)
+const RECENT_TRADES = 100;
+
+interface WalletTradeRow {
+  id: string;
+  coin: string;
+  direction: Direction;
+  entry_price: number;
+  max_size: number;
+  leverage: number;
+  result: Result;
+  result_pnl_percent: number;
+  opened_at: string;
+  closed_at: string;
 }
 
-// 유튜버와 같은 기준으로 규모(포지션 가치)가 가장 큰 1개를 대표 포지션으로 쓴다.
-// 매매가 워낙 잦아 포지션 단위 승패를 나누기 어려워서 승률은 집계하지 않는다(누적 승률 "—").
+export function isWalletTrader(name: string) {
+  return WALLET_TRADERS.some((trader) => trader.name === name);
+}
+
+// 유튜버 기록(positions 테이블)과 같은 PositionRow 모양으로 돌려줘서 기록 페이지·홈 표를 그대로 쓴다.
+// 종료 포지션은 scripts/wallet-traders가 쌓은 wallet_trades, 열린 포지션은 하이퍼리퀴드 실시간 조회.
+// 열린 포지션의 진입 시각은 수집 스크립트가 기억해둔 상태(wallet_sync)에서 찾고, 없으면 비워둔다("—").
+export async function getWalletTraderRows(name: string): Promise<PositionRow[]> {
+  const trader = WALLET_TRADERS.find((t) => t.name === name);
+  if (!trader) return [];
+  const supabase = getSupabase();
+  const [positions, { data: trades }, { data: sync }] = await Promise.all([
+    getHyperliquidPositions(trader.address),
+    supabase
+      .from("wallet_trades")
+      .select(
+        "id, coin, direction, entry_price, max_size, leverage, result, result_pnl_percent, opened_at, closed_at",
+      )
+      .eq("trader_name", name)
+      .order("closed_at", { ascending: false })
+      .limit(RECENT_TRADES),
+    supabase.from("wallet_sync").select("open_positions").eq("trader_name", name).maybeSingle(),
+  ]);
+
+  const base = {
+    type: "actual" as const,
+    trader_name: name,
+    trader_image: trader.image,
+    liquidation_price: null,
+    quote: null,
+    result_note: null,
+  };
+  const openStates = (sync?.open_positions ?? {}) as Record<
+    string,
+    { direction: Direction; openedAt: number }
+  >;
+  const openRows: PositionRow[] = (positions ?? []).map((position) => {
+    const state = openStates[position.coin];
+    return {
+      ...base,
+      id: `wallet-${name}-${position.coin}`,
+      symbol: position.coin,
+      leverage: position.leverage,
+      quantity: position.quantity,
+      entry_price: position.entryPrice,
+      direction: position.direction,
+      result: null,
+      result_pnl_percent: null,
+      result_recorded_at: null,
+      created_at:
+        state && state.direction === position.direction
+          ? new Date(state.openedAt).toISOString()
+          : "",
+    };
+  });
+  const closedRows: PositionRow[] = ((trades ?? []) as WalletTradeRow[]).map((trade) => ({
+    ...base,
+    id: trade.id,
+    symbol: trade.coin,
+    leverage: Number(trade.leverage),
+    quantity: Number(trade.max_size),
+    entry_price: Number(trade.entry_price),
+    direction: trade.direction,
+    result: trade.result,
+    result_pnl_percent: Number(trade.result_pnl_percent),
+    result_recorded_at: trade.closed_at,
+    created_at: trade.opened_at,
+  }));
+  return [...openRows, ...closedRows];
+}
+
+// 홈 표용. 유튜버와 같은 기준으로 규모(포지션 가치)가 가장 큰 열린 포지션 1개를 대표로 쓴다.
 export async function getWalletTraders() {
   return Promise.all(
     WALLET_TRADERS.map(async ({ name, address, image }) => {
-      const positions = await getHyperliquidPositions(address);
+      // 같은 주소 조회는 fetch 캐시(10초)로 한 번만 나간다.
+      const [rows, positions] = await Promise.all([
+        getWalletTraderRows(name),
+        getHyperliquidPositions(address),
+      ]);
       const top = positions?.slice().sort((a, b) => b.positionValue - a.positionValue)[0];
       const trader: TraderGroup = {
         traderName: name,
         traderImage: image,
-        rows: [],
-        openRow: top ? toPositionRow(name, image, top) : null,
-        stats: { wins: 0, draws: 0, losses: 0, total: 0, winRate: null },
+        rows,
+        openRow: top ? (rows.find((row) => !row.result && row.symbol === top.coin) ?? null) : null,
+        stats: getTraderStats(rows, name),
       };
       return { trader, markPrice: top?.currentPrice ?? null };
     }),

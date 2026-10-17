@@ -7,13 +7,16 @@ import { getTraderStats, HIDDEN_TRADERS } from "@/lib/traderGroups";
 import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
 import { getTraderRows, mainOpenPosition, positionSentence } from "@/lib/traderSnapshot";
+import { isWalletTrader } from "@/lib/walletTraders";
 import type { PositionRow, Direction } from "@/types/position";
 
 export const dynamic = "force-dynamic";
 
 const RESULT_LABEL = { win: "승", draw: "무", loss: "패" } as const;
 
+// 진입 시각을 모르는 포지션(지갑 추적 트레이더의 수집 전 포지션)은 "—"
 function formatKstDate(iso: string) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
     year: "2-digit",
@@ -59,7 +62,10 @@ export async function generateMetadata({
   const open = mainOpenPosition(await getTraderRows(name));
   const now = open ? `현재 ${positionSentence(open)}. ` : "";
   const title = `${name} 실시간 포지션 · 롱/숏 · 진입가 · 청산가 | 호반꿀`;
-  const description = `${now}코인 유튜버 ${name}의 방송 속 실제 포지션을 실시간으로 추적함. 누적 승률, 롱·숏 성향, 전체 포지션 기록.`;
+  const source = isWalletTrader(name)
+    ? `코인 트레이더 ${name}의 하이퍼리퀴드 지갑 포지션을 실시간으로 추적함. 최근 100건 기준 승률`
+    : `코인 유튜버 ${name}의 방송 속 실제 포지션을 실시간으로 추적함. 누적 승률`;
+  const description = `${now}${source}, 롱·숏 성향, 포지션 기록.`;
   // openGraph를 따로 안 주면 카톡·SNS 미리보기에 레이아웃의 사이트 제목이 그대로 나온다.
   return {
     title,
@@ -88,6 +94,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
       ? pnlValues.reduce((sum, value) => sum + value, 0) / pnlValues.length
       : null;
   const firstRecordedAt = rows[rows.length - 1].created_at;
+  const isWallet = isWalletTrader(name);
   const image = rows.find((row) => row.trader_image)?.trader_image ?? null;
   const mainDirection = long.count >= short.count ? "롱" : "숏";
   const open = mainOpenPosition(rows);
@@ -108,7 +115,9 @@ export default async function TraderPage({ params }: { params: { name: string } 
                 {name} 실시간 포지션
               </h1>
               <p className="mt-1 text-sm text-gray-400">
-                {`${formatKstDate(firstRecordedAt)}부터 추적 중`}
+                {isWallet
+                  ? "하이퍼리퀴드 지갑 실시간 추적 · 최근 종료 포지션 100건 기준"
+                  : `${formatKstDate(firstRecordedAt)}부터 추적 중`}
               </p>
             </div>
           </div>
