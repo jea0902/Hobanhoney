@@ -30,8 +30,8 @@ export default async function AiPage() {
             AI 잔액 추이
           </h1>
           <p className="mb-4 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-            모두 2026-03-06부터 매월 10일 100만원씩 똑같이 입금. 회색 점선(누적 입금)보다 위면 번
-            것, 아래면 잃은 것.
+            모두 2026-03-06부터 매월 10일 100만원씩 똑같이 입금. 잔액은 회색 점선(누적 입금), 누적
+            손익·수익률은 0 기준선보다 위면 번 것, 아래면 잃은 것.
           </p>
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <AiBalanceChart ais={ais} rows={timeline} />

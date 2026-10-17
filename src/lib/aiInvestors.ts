@@ -363,7 +363,7 @@ export async function getMonthlyReturnsByAi() {
   });
 }
 
-// AI 탭 잔액 추이 그래프용: 날짜마다 AI별 총자산과 누적 입금.
+// AI 탭 잔액 추이 그래프용: 날짜마다 AI별 총자산·누적 입금(`{id}_invested`)과 그래프용 공통 누적 입금(`invested`).
 // AI마다 기록 날짜가 달라서(미국·한국 거래일, 코인은 매일) 기록이 없는 날은 직전 값을 이어 쓴다.
 // 모든 AI가 같은 날 같은 금액을 입금하므로 누적 입금은 하나만 그린다(환율 차이로 조금씩 달라서 가장 큰 값).
 export async function getEquityTimeline() {
@@ -383,6 +383,8 @@ export async function getEquityTimeline() {
       if (today) last.set(ai.id, today);
       const latest = last.get(ai.id);
       row[ai.id] = latest ? latest.equity : null;
+      // 손익·수익률 보기는 AI마다 실제로 넣은 돈(입금일 환율이 조금씩 다름) 기준으로 계산한다
+      row[`${ai.id}_invested`] = latest ? latest.invested : null;
       invested = Math.max(invested, latest?.invested ?? 0);
     }
     row.invested = invested;
