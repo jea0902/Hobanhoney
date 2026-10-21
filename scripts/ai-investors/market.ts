@@ -115,18 +115,26 @@ interface Raw {
   facts: FactRow[];
 }
 
-async function loadRaw(): Promise<Raw> {
-  const priceRows = await readAll<PriceRow>("ai_prices", "symbol, date, close, dividend", [
-    "symbol",
-    "date",
-  ]);
-  const prices = new Map<string, Map<string, { close: number; dividend: number }>>();
+// symbols를 주면 그 종목 시세만 읽는다.
+async function loadPrices(symbols?: string[]) {
+  const priceRows = await readAll<PriceRow>(
+    "ai_prices",
+    "symbol, date, close, dividend",
+    ["symbol", "date"],
+    symbols && { column: "symbol", values: symbols },
+  );
+  const prices: Raw["prices"] = new Map();
   for (const row of priceRows) {
     if (!prices.has(row.symbol)) prices.set(row.symbol, new Map());
     prices
       .get(row.symbol)!
       .set(row.date, { close: Number(row.close), dividend: Number(row.dividend) });
   }
+  return prices;
+}
+
+async function loadRaw(): Promise<Raw> {
+  const prices = await loadPrices();
 
   const splitRows = await readAll<SplitRow>("ai_splits", "symbol, date, ratio", ["symbol", "date"]);
   const splits = new Map<string, SplitRow[]>();
@@ -303,6 +311,16 @@ function buildMarket(raw: Raw) {
     byTag.get(row.tag)!.push(row);
   }
   return market;
+}
+
+// 이미 DB에 쌓인 시세만으로, 출처에서 새로 받지 않고 바로 계산할 때 (AI 호반꿀 즉시 계산).
+export async function loadStoredMarket(symbols: string[]) {
+  return buildMarket({
+    prices: await loadPrices(symbols),
+    splits: new Map(),
+    universe: [],
+    facts: [],
+  });
 }
 
 export async function loadAndRefreshMarket() {

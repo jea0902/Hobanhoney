@@ -13,8 +13,9 @@ import {
   MAINTENANCE_MARGIN,
   START,
 } from "./config.ts";
-import { getTraderPositions, logEvent } from "./db.ts";
+import { getTraderPositions, logEvent, saveResult } from "./db.ts";
 import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
+import { loadStoredMarket } from "./market.ts";
 import type { Market } from "./market.ts";
 import { fetchCandles } from "./sources.ts";
 import type { Candle } from "./sources.ts";
@@ -51,6 +52,10 @@ function kstDate(time: number) {
   return new Date(time + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+// 끝난 포지션의 1분봉은 다시 바뀌지 않는다. 포지션 에이전트는 계속 켜져 있으면서 박호두 기록이 바뀔 때마다
+// 다시 계산하므로, 받은 것을 기억해 두고 새 포지션 것만 받는다 (매번 다 받으면 100번 넘게 불러서 1분 넘게 걸림).
+const closedCandles = new Map<string, Candle[]>();
+
 // 박호두 행 중 따라 할 수 있는 것: 아직 열려 있거나, 자동 기록이라 종료가격이 남은 것.
 async function loadFollowed(now: number) {
   const rows = await getTraderPositions(HOBANHONEY_TARGET, HOBANHONEY_FOLLOW_FROM);
@@ -63,7 +68,11 @@ async function loadFollowed(now: number) {
 
     const openedAt = Date.parse(row.created_at);
     const closedAt = isOpen ? null : Date.parse(row.result_recorded_at!);
-    const candles = await fetchCandles(row.symbol.replace("/", ""), openedAt, closedAt ?? now);
+    const cacheKey = `${row.symbol}|${openedAt}|${closedAt}`;
+    const candles =
+      closedCandles.get(cacheKey) ??
+      (await fetchCandles(row.symbol.replace("/", ""), openedAt, closedAt ?? now));
+    if (candles && closedAt !== null) closedCandles.set(cacheKey, candles);
     if (!candles) {
       // 강제청산 여부를 판정할 수 없으면 따라 하지 않는다.
       await logEvent(
@@ -265,4 +274,14 @@ export async function runHobanhoney(market: Market) {
     value: valueAt(p, now),
   }));
   return { trades, holdings, equity, cash, invested };
+}
+
+// 포지션 에이전트가 박호두 기록을 바꾼 뒤 부른다. 매일 도는 전체 계산을 기다리면 화면에 하루 늦게 나와서.
+// AI 호반꿀은 입금 환율만 시세가 필요해서, 출처에서 새로 받지 않고 DB에 쌓인 환율로 계산한다.
+export async function refreshHobanhoney() {
+  // 없으면 1분봉을 하나도 못 받아 모든 포지션을 건너뛴 결과(거래 0건)로 덮어쓰게 된다.
+  if (!process.env.SITE_URL || !process.env.CRON_SECRET)
+    throw new Error("SITE_URL·CRON_SECRET 환경변수가 없어 1분봉을 받을 수 없음");
+  const market = await loadStoredMarket(["KRW=X"]);
+  await saveResult({ ai: "hobanhoney", ...(await runHobanhoney(market)) });
 }

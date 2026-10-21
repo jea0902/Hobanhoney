@@ -64,5 +64,9 @@ export const LIVE_CHECK_INTERVAL_MS = 5 * 60_000;
 // 트레이딩 화면은 보이는데 이만큼 연속으로 못 읽으면(썸네일 5분 간격이라 약 30분) 관리자 로그에 알린다.
 export const FAILED_READINGS_ALERT = 6;
 
+// 박호두 기록이 바뀌면 이만큼 뒤에 AI 호반꿀을 다시 계산한다. 포지션을 뒤집을 때는 종료와 신규가
+// 연달아 기록돼서, 조금 기다렸다가 한 번에 계산한다 (사용자 요청: 30초~1분 안에 반영).
+export const HOBANHONEY_REFRESH_DELAY_MS = 30_000;
+
 // 무료 등급 하루 한도가 14,400건이라 채택 (Gemini Flash는 하루 20건).
 export const GEMMA_MODEL = "gemma-4-26b-a4b-it";
