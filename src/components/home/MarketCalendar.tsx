@@ -53,7 +53,7 @@ export default async function MarketCalendar() {
       <p className="mt-2 text-[11px] text-gray-400">
         한국시간 · ★★★ 중요 ★★ 보통 · 이번 주는 예상치·이전치 포함
         <br />
-        출처: Forex Factory, FRED, 연준, 한국은행
+        출처: Forex Factory, FRED, 연준, 한국은행, ECB, 일본은행, 영란은행
       </p>
     </div>
   );

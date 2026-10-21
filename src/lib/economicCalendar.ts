@@ -207,58 +207,126 @@ async function getFredReleaseDates(id: number, from: string, to: string) {
   }
 }
 
-// FOMC 결정일(회의 둘째 날) 목록. 페이지는 연도마다 "2026 FOMC Meetings" 제목 아래
-// 월("January", 걸치면 "April/May")과 날짜("27-28", 별표는 경제전망 발표 회의)가 한 줄씩 있다.
-async function getFomcDecisionDates() {
+// 중앙은행 공식 일정 페이지를 읽어 결정일("2026-10-28") 목록으로. API가 없어 HTML을 읽으므로,
+// 페이지 구조가 바뀌어 하나도 못 찾으면 관리자 로그에 남긴다.
+async function getSchedulePage(name: string, url: string, parse: (html: string) => string[]) {
   try {
-    const res = await fetch("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", {
-      next: { revalidate: SCHEDULE_REVALIDATE_SECONDS },
-    });
-    const html = await res.text();
-    const dates: string[] = [];
-    const sections = html.split(/(\d{4}) FOMC Meetings/);
-    for (let i = 1; i < sections.length; i += 2) {
-      const year = sections[i];
-      const meetings = sections[i + 1].matchAll(
-        /fomc-meeting__month[^>]*><strong>([A-Za-z/]+)<\/strong><\/div>\s*<div class="fomc-meeting__date[^>]*>\d+-(\d+)/g,
-      );
-      for (const [, monthText, lastDay] of meetings) {
-        // "April/May 30-1"이면 둘째 날은 뒤쪽 달
-        const month = MONTHS.indexOf(monthText.split("/").at(-1)!) + 1;
-        if (month === 0) continue;
-        dates.push(`${year}-${String(month).padStart(2, "0")}-${lastDay.padStart(2, "0")}`);
-      }
-    }
+    const res = await fetch(url, { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } });
+    const dates = parse(await res.text());
     if (dates.length === 0) throw new Error(`HTTP ${res.status}, 회의 날짜를 못 찾음`);
     return dates;
   } catch (error) {
-    logEvent("error", "economic_calendar", "FOMC 일정 조회 실패", String(error));
+    logEvent("error", "economic_calendar", `${name} 일정 조회 실패`, `${url} ${error}`);
     return [];
   }
 }
 
-// 금통위(통화정책방향 결정회의) 날짜 목록. 연도별 페이지에 "10월 22일(목)" 모양으로 회의 날짜가 있고,
-// 그해 일정 전체가 미리 올라와 있다 (2026-10-21 확인: 아직 안 열린 10/22·11/26도 있음, 2027년은 아직 비어 있음).
-async function getBokDecisionDates(year: number) {
-  try {
-    const res = await fetch(
-      `https://www.bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?mtgSe=A&menuNo=200755&pYear=${year}`,
-      { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } },
+function isoDate(year: string | number, month: number, day: string | number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// "Sept", "Oct." 같은 줄임말도 앞 세 글자로 찾는다.
+function monthNumber(text: string) {
+  return MONTHS.findIndex((m) => m.slice(0, 3) === text.slice(0, 3)) + 1;
+}
+
+// 태그를 지운 본문 텍스트
+function pageText(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/g, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+// 연도마다 "2026 FOMC Meetings" 제목 아래 월("January", 걸치면 "April/May")과 날짜("27-28")가 한 줄씩.
+// 결정은 회의 둘째 날.
+function parseFomc(html: string) {
+  const dates: string[] = [];
+  const sections = html.split(/(\d{4}) FOMC Meetings/);
+  for (let i = 1; i < sections.length; i += 2) {
+    const meetings = sections[i + 1].matchAll(
+      /fomc-meeting__month[^>]*><strong>([A-Za-z/]+)<\/strong><\/div>\s*<div class="fomc-meeting__date[^>]*>\d+-(\d+)/g,
     );
-    const html = await res.text();
+    for (const [, monthText, lastDay] of meetings) {
+      // "April/May 30-1"이면 둘째 날은 뒤쪽 달
+      const month = monthNumber(monthText.split("/").at(-1)!);
+      if (month > 0) dates.push(isoDate(sections[i], month, lastDay));
+    }
+  }
+  return dates;
+}
+
+// 연도별 페이지에 "10월 22일(목)" 모양으로 회의 날짜가 있고, 그해 일정 전체가 미리 올라와 있다
+// (2026-10-21 확인: 아직 안 열린 10/22·11/26도 있음, 2027년 페이지는 아직 비어 있음).
+function parseBok(year: number) {
+  return (html: string) => {
     // 연도 선택 목록 아래 회의 표만 본다.
     const table = html.slice(html.indexOf(`<h3>${year}년</h3>`));
-    return [...table.matchAll(/(\d{2})월 (\d{2})일\(.\)/g)].map(
-      ([, month, day]) => `${year}-${month}-${day}`,
+    return [...table.matchAll(/(\d{2})월 (\d{2})일\(.\)/g)].map(([, month, day]) =>
+      isoDate(year, Number(month), day),
     );
-  } catch (error) {
-    logEvent("error", "economic_calendar", "금통위 일정 조회 실패", `${year} ${error}`);
-    return [];
+  };
+}
+
+// "29/10/2026 Governing Council of the ECB: monetary policy meeting in Frankfurt (Day 2)" — 둘째 날이 결정일.
+// 통화정책이 아닌 회의(non-monetary policy meeting)는 이 문구가 달라서 안 걸린다.
+function parseEcb(html: string) {
+  return [
+    ...pageText(html).matchAll(
+      /(\d{2})\/(\d{2})\/(\d{4}) Governing Council of the ECB: monetary policy meeting[^(]*\(Day 2\)/g,
+    ),
+  ].map(([, day, month, year]) => isoDate(year, Number(month), day));
+}
+
+// 연도별 표("Table : 2026") 각 줄의 첫 칸이 회의 날짜: "Oct. 29 (Thurs.), 30 (Fri.)". 결정은 둘째 날.
+function parseBoj(html: string) {
+  const dates: string[] = [];
+  for (const table of html.split("<table").slice(1)) {
+    const year = table.match(/Table : (\d{4})/)?.[1];
+    if (!year) continue;
+    for (const [, cell] of table.matchAll(/<tr>\s*<td>([\s\S]*?)<\/td>/g)) {
+      const text = pageText(cell);
+      // 둘째 날이 다음 달로 넘어가면 "Apr. 30 (Thurs.), May 1 (Fri.)"처럼 달이 한 번 더 나온다.
+      const match = text.match(/^\s*([A-Za-z]+)\.? \d+ \([^)]*\), (?:([A-Za-z]+)\.? )?(\d+)/);
+      if (!match) continue;
+      const month = monthNumber(match[2] ?? match[1]);
+      if (month > 0) dates.push(isoDate(year, month, match[3]));
+    }
   }
+  return dates;
+}
+
+// "2026 confirmed dates" 아래 "Thursday 5 November" 모양 (금리 발표일).
+function parseBoe(html: string) {
+  const dates: string[] = [];
+  const sections = pageText(html).split(/(\d{4}) confirmed dates/);
+  for (let i = 1; i < sections.length; i += 2) {
+    for (const [, day, monthText] of sections[i + 1].matchAll(
+      /(?:Monday|Tuesday|Wednesday|Thursday|Friday) (\d{1,2}) ([A-Z][a-z]+)/g,
+    )) {
+      const month = monthNumber(monthText);
+      if (month > 0) dates.push(isoDate(sections[i], month, day));
+    }
+  }
+  return dates;
 }
 
 function kstDate(time: number) {
   return new Date(time + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// 발표 시각을 공식 페이지에서 확인하지 못한 결정일은 날짜만 보여 준다.
+function dateOnlyEvent(date: string, country: string, title: string): CalendarEvent {
+  return {
+    time: Date.parse(`${date}T00:00:00+09:00`),
+    hasTime: false,
+    country,
+    title,
+    high: true,
+    forecast: null,
+    previous: null,
+  };
 }
 
 // 오늘(한국시간)부터 2주치, 시간순
@@ -267,21 +335,38 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
   const from = kstDate(now);
   const to = kstDate(now + DAYS_AHEAD * DAY_MS);
 
-  // 2주 범위가 연말을 넘을 수 있어 금통위는 올해·내년 페이지를 같이 본다.
+  // 2주 범위가 연말을 넘을 수 있어 금통위는 올해·내년 페이지를 같이 본다 (내년은 비어 있을 수 있음).
   const year = Number(from.slice(0, 4));
-  const [forexFactory, fomcDates, bokThisYear, bokNextYear, ...fredDates] = await Promise.all([
+  const bokUrl = (y: number) =>
+    `https://www.bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?mtgSe=A&menuNo=200755&pYear=${y}`;
+  const [forexFactory, fomc, bok, bokNextYear, ecb, boj, boe, ...fredDates] = await Promise.all([
     getForexFactoryWeek(),
-    getFomcDecisionDates(),
-    getBokDecisionDates(year),
-    getBokDecisionDates(year + 1),
+    getSchedulePage(
+      "FOMC",
+      "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      parseFomc,
+    ),
+    getSchedulePage("금통위", bokUrl(year), parseBok(year)),
+    fetch(bokUrl(year + 1), { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } })
+      .then(async (res) => parseBok(year + 1)(await res.text()))
+      .catch(() => []),
+    getSchedulePage(
+      "ECB",
+      "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html",
+      parseEcb,
+    ),
+    getSchedulePage("일본은행", "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm", parseBoj),
+    getSchedulePage(
+      "영란은행",
+      "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+      parseBoe,
+    ),
     ...FRED_RELEASES.map((release) => getFredReleaseDates(release.id, from, to)),
   ]);
-  // 올해 일정은 연초에 전부 올라와 있어서, 비었으면 페이지 구조가 바뀐 것
-  if (bokThisYear.length === 0)
-    logEvent("error", "economic_calendar", "금통위 올해 일정을 못 찾음", String(year));
 
-  // 이번 주는 Forex Factory가 같은 미국 일정을 시각·예상치까지 줘서, 그 뒤만 FRED·FOMC로 채운다.
-  const usLater: CalendarEvent[] = [
+  // 이번 주는 Forex Factory가 같은 일정을 시각·예상치까지 줘서, 그 뒤만 공식 일정으로 채운다.
+  // 한국은 Forex Factory에 없어서 항상 공식 일정으로.
+  const later: CalendarEvent[] = [
     ...FRED_RELEASES.flatMap((release, i) =>
       fredDates[i].map((date) => ({
         time: easternTime(date, 8, 30),
@@ -293,7 +378,7 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
         previous: null,
       })),
     ),
-    ...fomcDates.map((date) => ({
+    ...fomc.map((date) => ({
       time: easternTime(date, 14, 0),
       hasTime: true,
       country: "미국",
@@ -302,19 +387,16 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
       forecast: null,
       previous: null,
     })),
+    ...ecb.map((date) => dateOnlyEvent(date, "유럽", "ECB 기준금리 결정")),
+    ...boj.map((date) => dateOnlyEvent(date, "일본", "일본은행 기준금리 결정")),
+    ...boe.map((date) => dateOnlyEvent(date, "영국", "영국 기준금리 결정")),
   ].filter((e) => e.time > forexFactory.coveredUntil);
 
-  const korea: CalendarEvent[] = [...bokThisYear, ...bokNextYear].map((date) => ({
-    time: Date.parse(`${date}T00:00:00+09:00`),
-    hasTime: false,
-    country: "한국",
-    title: "한국은행 기준금리 결정 (금통위)",
-    high: true,
-    forecast: null,
-    previous: null,
-  }));
+  const korea = [...bok, ...bokNextYear].map((date) =>
+    dateOnlyEvent(date, "한국", "한국은행 기준금리 결정 (금통위)"),
+  );
 
-  return [...forexFactory.events, ...usLater, ...korea]
+  return [...forexFactory.events, ...later, ...korea]
     .filter((e) => kstDate(e.time) >= from && kstDate(e.time) <= to)
     .sort((a, b) => a.time - b.time);
 }
