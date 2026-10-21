@@ -2,8 +2,9 @@ import { logEvent } from "@/lib/logger";
 
 // 증시 캘린더 (TODO.md 21번). 한 출처로 다 되는 무료 API가 없어서 세 가지를 합친다.
 // - 이번 주 세계 일정: Forex Factory 주간 피드 (비공식, 이번 주만, 한국 없음, 예상치·이전치 있음)
-// - 다음 주 이후 미국 일정: FRED 발표 일정 + FOMC 날짜 (날짜만 줘서 공식 발표 시각을 붙임)
-// - 한국: 금통위 날짜 (무료 API를 못 찾아 직접 적음)
+// - 다음 주 이후 미국 일정: FRED 발표 일정 + 연준 공식 FOMC 일정 페이지 (날짜만 줘서 공식 발표 시각을 붙임)
+// - 한국: 한국은행 공식 금통위 일정 페이지
+// FOMC·금통위는 API가 없어 공식 페이지를 읽는다. 일정은 1년 단위로 미리 공개되고 자주 안 바뀌어서 하루 캐시.
 // 인베스팅닷컴은 서버 요청을 403으로 막아서 쓰지 않음 (2026-10-21 확인).
 
 export interface CalendarEvent {
@@ -20,23 +21,22 @@ const DAY_MS = 86_400_000;
 const KST_OFFSET_MS = 9 * 3_600_000;
 const DAYS_AHEAD = 14;
 
-// FOMC 결과는 회의 둘째 날 미 동부 14:00 발표. 연준 공식 일정(federalreserve.gov, 2026-10-21 확인).
-const FOMC_DECISION_DATES = [
-  "2026-10-28",
-  "2026-12-09",
-  "2027-01-27",
-  "2027-03-17",
-  "2027-04-28",
-  "2027-06-09",
-  "2027-07-28",
-  "2027-09-15",
-  "2027-10-27",
-  "2027-12-08",
-];
+const SCHEDULE_REVALIDATE_SECONDS = 86_400;
 
-// 한국은행 통화정책방향 결정회의. 한국은행 공식 일정표는 직접 못 읽어서 토스뱅크 정리본(2026-01)을 쓰고
-// 기사로 2/26·7/16·8/27 회의를 교차 확인함 (2026-10-21). 2027년 일정이 나오면 추가할 것.
-const BOK_DECISION_DATES = ["2026-10-22", "2026-11-26"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 // FRED 발표 일정 id → 이름. 다섯 발표 모두 미 동부 08:30 발표.
 const FRED_RELEASES: { id: number; title: string }[] = [
@@ -207,6 +207,56 @@ async function getFredReleaseDates(id: number, from: string, to: string) {
   }
 }
 
+// FOMC 결정일(회의 둘째 날) 목록. 페이지는 연도마다 "2026 FOMC Meetings" 제목 아래
+// 월("January", 걸치면 "April/May")과 날짜("27-28", 별표는 경제전망 발표 회의)가 한 줄씩 있다.
+async function getFomcDecisionDates() {
+  try {
+    const res = await fetch("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", {
+      next: { revalidate: SCHEDULE_REVALIDATE_SECONDS },
+    });
+    const html = await res.text();
+    const dates: string[] = [];
+    const sections = html.split(/(\d{4}) FOMC Meetings/);
+    for (let i = 1; i < sections.length; i += 2) {
+      const year = sections[i];
+      const meetings = sections[i + 1].matchAll(
+        /fomc-meeting__month[^>]*><strong>([A-Za-z/]+)<\/strong><\/div>\s*<div class="fomc-meeting__date[^>]*>\d+-(\d+)/g,
+      );
+      for (const [, monthText, lastDay] of meetings) {
+        // "April/May 30-1"이면 둘째 날은 뒤쪽 달
+        const month = MONTHS.indexOf(monthText.split("/").at(-1)!) + 1;
+        if (month === 0) continue;
+        dates.push(`${year}-${String(month).padStart(2, "0")}-${lastDay.padStart(2, "0")}`);
+      }
+    }
+    if (dates.length === 0) throw new Error(`HTTP ${res.status}, 회의 날짜를 못 찾음`);
+    return dates;
+  } catch (error) {
+    logEvent("error", "economic_calendar", "FOMC 일정 조회 실패", String(error));
+    return [];
+  }
+}
+
+// 금통위(통화정책방향 결정회의) 날짜 목록. 연도별 페이지에 "10월 22일(목)" 모양으로 회의 날짜가 있고,
+// 그해 일정 전체가 미리 올라와 있다 (2026-10-21 확인: 아직 안 열린 10/22·11/26도 있음, 2027년은 아직 비어 있음).
+async function getBokDecisionDates(year: number) {
+  try {
+    const res = await fetch(
+      `https://www.bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?mtgSe=A&menuNo=200755&pYear=${year}`,
+      { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } },
+    );
+    const html = await res.text();
+    // 연도 선택 목록 아래 회의 표만 본다.
+    const table = html.slice(html.indexOf(`<h3>${year}년</h3>`));
+    return [...table.matchAll(/(\d{2})월 (\d{2})일\(.\)/g)].map(
+      ([, month, day]) => `${year}-${month}-${day}`,
+    );
+  } catch (error) {
+    logEvent("error", "economic_calendar", "금통위 일정 조회 실패", `${year} ${error}`);
+    return [];
+  }
+}
+
 function kstDate(time: number) {
   return new Date(time + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
@@ -217,10 +267,18 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
   const from = kstDate(now);
   const to = kstDate(now + DAYS_AHEAD * DAY_MS);
 
-  const [forexFactory, ...fredDates] = await Promise.all([
+  // 2주 범위가 연말을 넘을 수 있어 금통위는 올해·내년 페이지를 같이 본다.
+  const year = Number(from.slice(0, 4));
+  const [forexFactory, fomcDates, bokThisYear, bokNextYear, ...fredDates] = await Promise.all([
     getForexFactoryWeek(),
+    getFomcDecisionDates(),
+    getBokDecisionDates(year),
+    getBokDecisionDates(year + 1),
     ...FRED_RELEASES.map((release) => getFredReleaseDates(release.id, from, to)),
   ]);
+  // 올해 일정은 연초에 전부 올라와 있어서, 비었으면 페이지 구조가 바뀐 것
+  if (bokThisYear.length === 0)
+    logEvent("error", "economic_calendar", "금통위 올해 일정을 못 찾음", String(year));
 
   // 이번 주는 Forex Factory가 같은 미국 일정을 시각·예상치까지 줘서, 그 뒤만 FRED·FOMC로 채운다.
   const usLater: CalendarEvent[] = [
@@ -235,7 +293,7 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
         previous: null,
       })),
     ),
-    ...FOMC_DECISION_DATES.map((date) => ({
+    ...fomcDates.map((date) => ({
       time: easternTime(date, 14, 0),
       hasTime: true,
       country: "미국",
@@ -246,7 +304,7 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
     })),
   ].filter((e) => e.time > forexFactory.coveredUntil);
 
-  const korea: CalendarEvent[] = BOK_DECISION_DATES.map((date) => ({
+  const korea: CalendarEvent[] = [...bokThisYear, ...bokNextYear].map((date) => ({
     time: Date.parse(`${date}T00:00:00+09:00`),
     hasTime: false,
     country: "한국",
