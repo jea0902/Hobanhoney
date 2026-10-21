@@ -4,35 +4,12 @@
 // 매번 2026-03-06부터 처음부터 다시 계산한다 — 상태를 이어 붙이는 것보다 단순하고, 데이터가 고쳐지면 결과도 따라 고쳐진다.
 import { runBurry } from "./burry.ts";
 import { runBuffett } from "./buffett.ts";
-import type { AiId } from "./config.ts";
-import { DRY_RUN, logEvent, replaceRows } from "./db.ts";
+import { DRY_RUN, logEvent, saveResult } from "./db.ts";
 import { runFearGreed, runKoreanAnt, runPort, runWallstreet } from "./funds.ts";
 import { runHobanhoney } from "./hobanhoney.ts";
-import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 import { loadAndRefreshMarket } from "./market.ts";
 import { runMartin } from "./martin.ts";
 import { runWonyotti } from "./wonyotti.ts";
-
-interface Result {
-  ai: AiId;
-  trades: TradeRow[];
-  holdings: HoldingRow[];
-  equity: EquityRow[];
-}
-
-async function save(result: Result) {
-  const last = result.equity.at(-1);
-  if (last) {
-    const rate = (last.equity / last.invested - 1) * 100;
-    console.log(
-      `${result.ai}: 입금 $${last.invested.toFixed(2)} → $${last.equity.toFixed(2)} (${rate >= 0 ? "+" : ""}${rate.toFixed(2)}%), ` +
-        `현금 $${last.cash.toFixed(2)}, 보유 ${result.holdings.length}종목, 거래 ${result.trades.length}건`,
-    );
-  }
-  await replaceRows("ai_trades", result.ai, result.trades);
-  await replaceRows("ai_holdings", result.ai, result.holdings);
-  await replaceRows("ai_equity_daily", result.ai, result.equity);
-}
 
 async function main() {
   if (!process.env.SEC_CONTACT_EMAIL)
@@ -51,7 +28,7 @@ async function main() {
     runPort(market, usToday),
   ]) {
     const today = ledger.ai === "korean_ant" ? krToday : usToday;
-    await save({
+    await saveResult({
       ai: ledger.ai,
       trades: ledger.trades,
       holdings: ledger.holdingRows(today),
@@ -60,13 +37,13 @@ async function main() {
   }
 
   const hobanhoney = await runHobanhoney(market);
-  await save({ ai: "hobanhoney", ...hobanhoney });
+  await saveResult({ ai: "hobanhoney", ...hobanhoney });
 
   const wonyotti = await runWonyotti(market);
-  await save({ ai: "wonyotti", ...wonyotti });
+  await saveResult({ ai: "wonyotti", ...wonyotti });
 
   const martin = await runMartin(market);
-  await save({ ai: "martin", ...martin });
+  await saveResult({ ai: "martin", ...martin });
 
   console.log(DRY_RUN ? "[dry-run] DB에 쓰지 않음" : "완료");
 }

@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import type { AiId } from "./config.ts";
+import type { EquityRow, HoldingRow, TradeRow } from "./ledger.ts";
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -6,10 +8,17 @@ const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SE
 export const DRY_RUN = process.argv.includes("--dry-run");
 
 // Supabase는 한 번에 최대 1000행만 돌려줘서 나눠 읽는다. order는 페이지가 겹치지 않게 고유한 순서여야 한다.
-export async function readAll<T>(table: string, columns: string, order: string[]): Promise<T[]> {
+// filter를 주면 그 칸 값이 목록에 있는 행만 읽는다.
+export async function readAll<T>(
+  table: string,
+  columns: string,
+  order: string[],
+  filter?: { column: string; values: string[] },
+): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += 1000) {
     let query = supabase.from(table).select(columns);
+    if (filter) query = query.in(filter.column, filter.values);
     for (const column of order) query = query.order(column);
     const { data, error } = await query.range(from, from + 999);
     // 테이블을 만들기 전에도 --dry-run으로 계산을 확인할 수 있게 빈 데이터로 시작한다.
@@ -45,6 +54,27 @@ export async function replaceRows(table: string, ai: string, rows: object[]) {
   const { error } = await supabase.from(table).delete().eq("ai", ai);
   if (error) throw error;
   await insertRows(table, rows);
+}
+
+export interface AiResult {
+  ai: AiId;
+  trades: TradeRow[];
+  holdings: HoldingRow[];
+  equity: EquityRow[];
+}
+
+export async function saveResult(result: AiResult) {
+  const last = result.equity.at(-1);
+  if (last) {
+    const rate = (last.equity / last.invested - 1) * 100;
+    console.log(
+      `${result.ai}: 입금 $${last.invested.toFixed(2)} → $${last.equity.toFixed(2)} (${rate >= 0 ? "+" : ""}${rate.toFixed(2)}%), ` +
+        `현금 $${last.cash.toFixed(2)}, 보유 ${result.holdings.length}종목, 거래 ${result.trades.length}건`,
+    );
+  }
+  await replaceRows("ai_trades", result.ai, result.trades);
+  await replaceRows("ai_holdings", result.ai, result.holdings);
+  await replaceRows("ai_equity_daily", result.ai, result.equity);
 }
 
 export async function getTraderPositions(traderName: string, since: string) {

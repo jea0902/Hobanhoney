@@ -3,8 +3,11 @@
 import { createHash } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { PositionRow } from "../../src/types/position.ts";
+import { HOBANHONEY_TARGET } from "../ai-investors/config.ts";
+import { refreshHobanhoney } from "../ai-investors/hobanhoney.ts";
 import {
   FAILED_READINGS_ALERT,
+  HOBANHONEY_REFRESH_DELAY_MS,
   LIVE_CHECK_INTERVAL_MS,
   POLL_INTERVAL_MS,
   TRADERS,
@@ -196,6 +199,30 @@ async function apply(
 
   log(traderName, `${DRY_RUN ? "[dry-run] " : ""}${summary}`);
   if (!DRY_RUN) await logAgent("info", `[${traderName}] ${summary}`, evidence);
+  if (!DRY_RUN && traderName === HOBANHONEY_TARGET) scheduleHobanhoney();
+}
+
+let hobanhoneyTimer: NodeJS.Timeout | null = null;
+// 계산이 도는 중에 또 바뀌면 끝난 뒤에 이어서 돌도록 줄을 세운다 (두 계산이 동시에 결과를 지우고 쓰지 않게).
+let hobanhoneyQueue = Promise.resolve();
+
+function scheduleHobanhoney() {
+  if (hobanhoneyTimer) clearTimeout(hobanhoneyTimer);
+  hobanhoneyTimer = setTimeout(() => {
+    hobanhoneyTimer = null;
+    hobanhoneyQueue = hobanhoneyQueue.then(runHobanhoneyRefresh);
+  }, HOBANHONEY_REFRESH_DELAY_MS);
+}
+
+async function runHobanhoneyRefresh() {
+  const startedAt = Date.now();
+  try {
+    await refreshHobanhoney();
+    log("AI 호반꿀", `다시 계산함 (${((Date.now() - startedAt) / 1000).toFixed(1)}초)`);
+  } catch (error) {
+    log("AI 호반꿀", `다시 계산 실패: ${String(error)}`);
+    await logAgent("error", `[AI 호반꿀] 다시 계산 실패: ${String(error)}`).catch(() => {});
+  }
 }
 
 async function runTrader(trader: Trader) {
@@ -223,5 +250,7 @@ async function runTrader(trader: Trader) {
 }
 
 console.log(`포지션 에이전트 시작${DRY_RUN ? " (dry-run: DB에 쓰지 않음)" : ""}`);
+// 에이전트가 꺼져 있던 동안의 변경을 반영하고, 끝난 포지션 1분봉을 미리 받아 둔다.
+if (!DRY_RUN) scheduleHobanhoney();
 // 트레이더마다 따로 돌려서, 한 명의 Gemma 응답(70~90초)이 다른 트레이더를 막지 않게 한다.
 await Promise.all(TRADERS.map(runTrader));
