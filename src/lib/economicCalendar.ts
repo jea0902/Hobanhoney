@@ -129,6 +129,8 @@ const FF_TITLES: Record<string, string> = {
   "Cash Rate": "호주 기준금리 결정",
   "Official Cash Rate": "뉴질랜드 기준금리 결정",
   "SNB Policy Rate": "스위스 기준금리 결정",
+  "1-y Loan Prime Rate": "중국 1년 LPR",
+  "5-y Loan Prime Rate": "중국 5년 LPR",
   "Monetary Policy Statement": "통화정책 성명",
 };
 
@@ -316,6 +318,53 @@ function kstDate(time: number) {
   return new Date(time + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+// 중국 공휴일·대체근무일. 국무원 공고를 연도별 JSON으로 옮긴 GitHub 프로젝트(NateScarlet/holiday-cn, 비공식)
+// — 공식 기계 판독용 출처를 못 찾아 사용자 승인 후 사용 (2026-10-21). 날짜 → 쉬는 날이면 true, 대체근무일이면 false.
+async function getChinaHolidays(year: number) {
+  try {
+    const res = await fetch(
+      `https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/${year}.json`,
+      {
+        next: { revalidate: SCHEDULE_REVALIDATE_SECONDS },
+      },
+    );
+    const json: { days: { date: string; isOffDay: boolean }[] } = await res.json();
+    if (!Array.isArray(json?.days) || json.days.length === 0) throw new Error(`HTTP ${res.status}`);
+    return new Map(json.days.map((d) => [d.date, d.isOffDay]));
+  } catch (error) {
+    // 그해 공고가 아직 없을 수도 있어서(보통 전년 11~12월 발표) 주말만 피하는 계산으로 대신한다.
+    logEvent("error", "economic_calendar", "중국 휴일 데이터 조회 실패", `${year} ${error}`);
+    return null;
+  }
+}
+
+// LPR은 매월 20일 9:30(베이징) 발표, 휴일이면 다음 영업일 (인민은행 2019년 공고). 중국 휴일 데이터로 계산한
+// 날짜가 chinamoney 실제 발표일 최근 1년 12번과 모두 일치함 (2026-10-21 확인, 춘절·대체근무일 포함).
+function lprEvents(months: string[], holidays: Map<number, Map<string, boolean> | null>) {
+  return months.map((month) => {
+    const calendar = holidays.get(Number(month.slice(0, 4))) ?? null;
+    let date = `${month}-20`;
+    const isWorkday = (d: string) => {
+      const off = calendar?.get(d);
+      if (off !== undefined) return !off;
+      const weekday = new Date(`${d}T00:00:00Z`).getUTCDay();
+      return weekday !== 0 && weekday !== 6;
+    };
+    while (!isWorkday(date)) date = new Date(Date.parse(date) + DAY_MS).toISOString().slice(0, 10);
+    return {
+      time: Date.parse(`${date}T09:30:00+08:00`),
+      hasTime: true,
+      country: "중국",
+      title: calendar
+        ? "중국 LPR 발표 (기준금리)"
+        : "중국 LPR 발표 (기준금리, 휴일 미반영 날짜 추정)",
+      high: true,
+      forecast: null,
+      previous: null,
+    };
+  });
+}
+
 // 발표 시각을 공식 페이지에서 확인하지 못한 결정일은 날짜만 보여 준다.
 function dateOnlyEvent(date: string, country: string, title: string): CalendarEvent {
   return {
@@ -339,30 +388,35 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
   const year = Number(from.slice(0, 4));
   const bokUrl = (y: number) =>
     `https://www.bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?mtgSe=A&menuNo=200755&pYear=${y}`;
-  const [forexFactory, fomc, bok, bokNextYear, ecb, boj, boe, ...fredDates] = await Promise.all([
-    getForexFactoryWeek(),
-    getSchedulePage(
-      "FOMC",
-      "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
-      parseFomc,
-    ),
-    getSchedulePage("금통위", bokUrl(year), parseBok(year)),
-    fetch(bokUrl(year + 1), { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } })
-      .then(async (res) => parseBok(year + 1)(await res.text()))
-      .catch(() => []),
-    getSchedulePage(
-      "ECB",
-      "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html",
-      parseEcb,
-    ),
-    getSchedulePage("일본은행", "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm", parseBoj),
-    getSchedulePage(
-      "영란은행",
-      "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
-      parseBoe,
-    ),
-    ...FRED_RELEASES.map((release) => getFredReleaseDates(release.id, from, to)),
-  ]);
+  // 2주 범위가 걸치는 달(이번 달·다음 달)의 LPR 발표일. 연말이면 두 해의 휴일 데이터가 필요하다.
+  const lprMonths = [...new Set([from.slice(0, 7), to.slice(0, 7)])];
+  const lprYears = [...new Set(lprMonths.map((m) => Number(m.slice(0, 4))))];
+  const [forexFactory, fomc, bok, bokNextYear, ecb, boj, boe, chinaHolidays, ...fredDates] =
+    await Promise.all([
+      getForexFactoryWeek(),
+      getSchedulePage(
+        "FOMC",
+        "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        parseFomc,
+      ),
+      getSchedulePage("금통위", bokUrl(year), parseBok(year)),
+      fetch(bokUrl(year + 1), { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } })
+        .then(async (res) => parseBok(year + 1)(await res.text()))
+        .catch(() => []),
+      getSchedulePage(
+        "ECB",
+        "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html",
+        parseEcb,
+      ),
+      getSchedulePage("일본은행", "https://www.boj.or.jp/en/mopo/mpmsche_minu/index.htm", parseBoj),
+      getSchedulePage(
+        "영란은행",
+        "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+        parseBoe,
+      ),
+      Promise.all(lprYears.map(getChinaHolidays)),
+      ...FRED_RELEASES.map((release) => getFredReleaseDates(release.id, from, to)),
+    ]);
 
   // 이번 주는 Forex Factory가 같은 일정을 시각·예상치까지 줘서, 그 뒤만 공식 일정으로 채운다.
   // 한국은 Forex Factory에 없어서 항상 공식 일정으로.
@@ -390,6 +444,7 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
     ...ecb.map((date) => dateOnlyEvent(date, "유럽", "ECB 기준금리 결정")),
     ...boj.map((date) => dateOnlyEvent(date, "일본", "일본은행 기준금리 결정")),
     ...boe.map((date) => dateOnlyEvent(date, "영국", "영국 기준금리 결정")),
+    ...lprEvents(lprMonths, new Map(lprYears.map((y, i) => [y, chinaHolidays[i]]))),
   ].filter((e) => e.time > forexFactory.coveredUntil);
 
   const korea = [...bok, ...bokNextYear].map((date) =>
