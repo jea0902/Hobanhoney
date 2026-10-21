@@ -73,7 +73,7 @@ const US_ACTUALS: Record<string, { series: string; units: string; format: (v: nu
 
 // 국가데이터처 월간 보도계획에서 고르는 한국 지표 (보도자료명 "2026년 10월 소비자물가동향"의 뒷부분)
 const KOSTAT_TITLES: Record<string, string> = {
-  소비자물가동향: "소비자물가",
+  소비자물가동향: "소비자물가 (전년비)",
   고용동향: "고용동향",
   산업활동동향: "산업활동동향 (생산·소비·투자)",
 };
@@ -253,6 +253,51 @@ async function getUsActual(title: string, time: number) {
   }
 }
 
+// 한국은행 ECOS 시계열 (통계코드·항목코드는 ECOS StatisticTableList·StatisticItemList로 확인, 2026-10-21).
+// 시점("202609") → 값.
+async function getEcosSeries(stat: string, cycle: string, from: string, to: string, item: string) {
+  const url = `https://ecos.bok.or.kr/api/StatisticSearch/${process.env.ECOS_API_KEY}/json/kr/1/100/${stat}/${cycle}/${from}/${to}/${item}`;
+  try {
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const json = await res.json();
+    const rows: { TIME: string; DATA_VALUE: string }[] = json?.StatisticSearch?.row ?? [];
+    return new Map(rows.map((row) => [row.TIME, Number(row.DATA_VALUE)]));
+  } catch (error) {
+    logEvent("error", "economic_calendar", "ECOS 조회 실패", `${stat}/${item} ${error}`);
+    return new Map<string, number>();
+  }
+}
+
+function yearAgo(yyyymm: string) {
+  return `${Number(yyyymm.slice(0, 4)) - 1}${yyyymm.slice(4)}`;
+}
+
+// 보도자료의 기준 달(예: "202610")이 ECOS에 들어온 뒤에만 결과를 만든다. 발표 당일 ECOS 반영이 늦으면
+// 그동안은 결과 없이 보이고, 지난달 값을 이번 결과로 잘못 보여 주지는 않는다.
+async function getKoreaActual(name: string, refMonth: string) {
+  if (name === "소비자물가동향") {
+    const cpi = await getEcosSeries("901Y009", "M", yearAgo(refMonth), refMonth, "0");
+    const now = cpi.get(refMonth);
+    const before = cpi.get(yearAgo(refMonth));
+    return now && before ? `${((now / before - 1) * 100).toFixed(1)}%` : null;
+  }
+  if (name === "고용동향") {
+    const [employed, unemployment] = await Promise.all([
+      getEcosSeries("901Y027", "M", yearAgo(refMonth), refMonth, "I61BA/I28A"),
+      getEcosSeries("901Y027", "M", refMonth, refMonth, "I61BC/I28A"),
+    ]);
+    const now = employed.get(refMonth);
+    const before = employed.get(yearAgo(refMonth));
+    const rate = unemployment.get(refMonth);
+    if (!now || !before || rate === undefined) return null;
+    // 취업자는 천 명 단위, 보도자료처럼 전년 같은 달 대비 증감. 이 표는 원계열(I28A)·계절조정(I28B)이 같이 있어서
+    // 보도자료 첫 줄과 같은 원계열을 고른다 (안 고르면 계절조정 값이 섞임).
+    const change = (now - before) / 10;
+    return `취업자 ${change >= 0 ? "+" : ""}${change.toFixed(1)}만 명 · 실업률 ${rate.toFixed(1)}%`;
+  }
+  return null;
+}
+
 // 국가데이터처 월간 보도계획 표: "11.03.( 화 ) | 08:00 | 2026년 10월 소비자물가동향". 그해 보도계획만 있어서
 // 연말에 다음 해 1월은 못 읽는다 (새해 계획이 올라오면 그때부터 보임).
 async function getKostatEvents(year: number, month: number): Promise<CalendarEvent[]> {
@@ -263,22 +308,27 @@ async function getKostatEvents(year: number, month: number): Promise<CalendarEve
     if (!html.includes(`${year}년 ${month}월 보도계획`))
       throw new Error(`HTTP ${res.status}, 표 없음`);
     const text = pageText(html.replace(/<\/td>/g, " | "));
-    const events: CalendarEvent[] = [];
-    for (const [, mm, dd, time, name] of text.matchAll(
-      /(\d{2})\.(\d{2})\.\( . \) \| (\d{2}:\d{2}) \| \d{4}년 \d{1,2}월 (소비자물가동향|고용동향|산업활동동향) \|/g,
-    )) {
-      events.push({
-        time: Date.parse(`${year}-${mm}-${dd}T${time}:00+09:00`),
-        hasTime: true,
-        country: "한국",
-        title: KOSTAT_TITLES[name],
-        high: true,
-        forecast: null,
-        previous: null,
-        actual: null,
-      });
-    }
-    return events;
+    const rows = [
+      ...text.matchAll(
+        /(\d{2})\.(\d{2})\.\( . \) \| (\d{2}:\d{2}) \| (\d{4})년 (\d{1,2})월 (소비자물가동향|고용동향|산업활동동향) \|/g,
+      ),
+    ];
+    return await Promise.all(
+      rows.map(async ([, mm, dd, clock, refYear, refMonth, name]) => {
+        const time = Date.parse(`${year}-${mm}-${dd}T${clock}:00+09:00`);
+        const ref = `${refYear}${refMonth.padStart(2, "0")}`;
+        return {
+          time,
+          hasTime: true,
+          country: "한국",
+          title: KOSTAT_TITLES[name],
+          high: true,
+          forecast: null,
+          previous: null,
+          actual: time <= Date.now() ? await getKoreaActual(name, ref) : null,
+        };
+      }),
+    );
   } catch (error) {
     logEvent("error", "economic_calendar", "국가데이터처 보도계획 조회 실패", `${url} ${error}`);
     return [];
