@@ -15,11 +15,14 @@ export interface CalendarEvent {
   high: boolean; // 중요도 높음 (아니면 중간)
   forecast: string | null;
   previous: string | null;
+  actual: string | null; // 발표 뒤 결과 (지금은 미국만 — FRED)
 }
 
 const DAY_MS = 86_400_000;
 const KST_OFFSET_MS = 9 * 3_600_000;
 const DAYS_AHEAD = 14;
+// 발표 결과를 1~2일 보여 주려고 지난 일정도 이만큼 남긴다 (사용자 요청).
+const DAYS_BEHIND = 2;
 
 const SCHEDULE_REVALIDATE_SECONDS = 86_400;
 
@@ -39,13 +42,41 @@ const MONTHS = [
 ];
 
 // FRED 발표 일정 id → 이름. 다섯 발표 모두 미 동부 08:30 발표.
+// 이름은 Forex Factory 제목의 한글 이름과 맞춰서 아래 US_ACTUALS로 결과를 같이 찾는다.
 const FRED_RELEASES: { id: number; title: string }[] = [
-  { id: 10, title: "CPI (소비자물가)" },
-  { id: 50, title: "고용보고서 (비농업 고용·실업률)" },
-  { id: 53, title: "GDP" },
-  { id: 46, title: "PPI (생산자물가)" },
-  { id: 9, title: "소매판매" },
+  { id: 10, title: "CPI (전년비)" },
+  { id: 50, title: "비농업 고용" },
+  { id: 53, title: "GDP (전분기비 연율)" },
+  { id: 46, title: "PPI (전월비)" },
+  { id: 9, title: "소매판매 (전월비)" },
 ];
+
+// 미국 지표 결과: 한글 제목 → FRED 시리즈. units는 FRED 변환(pch 전월비, pc1 전년비, chg 증감, lin 그대로).
+const percent = (v: number) => `${v.toFixed(1)}%`;
+const thousands = (v: number) => `${Math.round(v)}K`;
+const US_ACTUALS: Record<string, { series: string; units: string; format: (v: number) => string }> =
+  {
+    "CPI (전월비)": { series: "CPIAUCSL", units: "pch", format: percent },
+    "CPI (전년비)": { series: "CPIAUCSL", units: "pc1", format: percent },
+    "근원 CPI (전월비)": { series: "CPILFESL", units: "pch", format: percent },
+    "근원 CPI (전년비)": { series: "CPILFESL", units: "pc1", format: percent },
+    "비농업 고용": { series: "PAYEMS", units: "chg", format: thousands },
+    실업률: { series: "UNRATE", units: "lin", format: percent },
+    "신규 실업수당 청구": { series: "ICSA", units: "lin", format: (v) => thousands(v / 1000) },
+    "소매판매 (전월비)": { series: "RSAFS", units: "pch", format: percent },
+    "PPI (전월비)": { series: "PPIFIS", units: "pch", format: percent },
+    "GDP (전분기비 연율)": { series: "A191RL1Q225SBEA", units: "lin", format: percent },
+    "GDP 속보치 (전분기비)": { series: "A191RL1Q225SBEA", units: "lin", format: percent },
+    "GDP 잠정치 (전분기비)": { series: "A191RL1Q225SBEA", units: "lin", format: percent },
+    "GDP 확정치 (전분기비)": { series: "A191RL1Q225SBEA", units: "lin", format: percent },
+  };
+
+// 국가데이터처 월간 보도계획에서 고르는 한국 지표 (보도자료명 "2026년 10월 소비자물가동향"의 뒷부분)
+const KOSTAT_TITLES: Record<string, string> = {
+  소비자물가동향: "소비자물가",
+  고용동향: "고용동향",
+  산업활동동향: "산업활동동향 (생산·소비·투자)",
+};
 
 const FF_COUNTRIES: Record<string, string> = {
   USD: "미국",
@@ -166,7 +197,7 @@ interface FfEvent {
   previous: string;
 }
 
-// 이번 주 전체 일정과, 이 피드가 덮는 마지막 시각(그 뒤는 FRED·FOMC로 채움).
+// 이번 주 전체 일정과, 이 피드가 덮는 기간(그 밖은 공식 일정으로 채움).
 async function getForexFactoryWeek() {
   try {
     const res = await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json", {
@@ -174,7 +205,8 @@ async function getForexFactoryWeek() {
     });
     const json: FfEvent[] = await res.json();
     if (!Array.isArray(json)) throw new Error(`HTTP ${res.status}`);
-    const coveredUntil = Math.max(...json.map((e) => Date.parse(e.date)));
+    const times = json.map((e) => Date.parse(e.date));
+    const covered = { from: Math.min(...times), until: Math.max(...times) };
     const events: CalendarEvent[] = json
       .filter((e) => e.impact === "High" || e.impact === "Medium")
       .map((e) => ({
@@ -185,12 +217,88 @@ async function getForexFactoryWeek() {
         high: e.impact === "High",
         forecast: e.forecast || null,
         previous: e.previous || null,
+        actual: null,
       }));
-    return { events, coveredUntil };
+    return { events, covered };
   } catch (error) {
     logEvent("error", "economic_calendar", "Forex Factory 일정 조회 실패", String(error));
-    return { events: [], coveredUntil: 0 };
+    return { events: [], covered: { from: 0, until: 0 } };
   }
+}
+
+function easternDate(time: number) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(time);
+}
+
+// 그 발표의 결과. FRED 시리즈가 마지막으로 갱신된 날(vintage)이 발표일(미 동부)과 같을 때만 —
+// 아니면 아직 반영 전이라 지난 달 값을 이번 결과로 잘못 보여 주게 된다.
+async function getUsActual(title: string, time: number) {
+  const spec = US_ACTUALS[title];
+  if (!spec || time > Date.now()) return null;
+  const base = `https://api.stlouisfed.org/fred/series`;
+  const key = `api_key=${process.env.FRED_API_KEY}&file_type=json`;
+  try {
+    const [vintages, observations] = await Promise.all(
+      [
+        `${base}/vintagedates?series_id=${spec.series}&${key}&sort_order=desc&limit=1`,
+        `${base}/observations?series_id=${spec.series}&${key}&sort_order=desc&limit=1&units=${spec.units}`,
+      ].map((url) => fetch(url, { next: { revalidate: 3600 } }).then((res) => res.json())),
+    );
+    if (vintages?.vintage_dates?.[0] !== easternDate(time)) return null;
+    const value = Number(observations?.observations?.[0]?.value);
+    return Number.isNaN(value) ? null : spec.format(value);
+  } catch (error) {
+    logEvent("error", "economic_calendar", "FRED 결과 조회 실패", `${spec.series} ${error}`);
+    return null;
+  }
+}
+
+// 국가데이터처 월간 보도계획 표: "11.03.( 화 ) | 08:00 | 2026년 10월 소비자물가동향". 그해 보도계획만 있어서
+// 연말에 다음 해 1월은 못 읽는다 (새해 계획이 올라오면 그때부터 보임).
+async function getKostatEvents(year: number, month: number): Promise<CalendarEvent[]> {
+  const url = `https://mods.go.kr/newsPln.es?mid=a10305000000&oa_mm=${String(month).padStart(2, "0")}&act=list`;
+  try {
+    const res = await fetch(url, { next: { revalidate: SCHEDULE_REVALIDATE_SECONDS } });
+    const html = await res.text();
+    if (!html.includes(`${year}년 ${month}월 보도계획`))
+      throw new Error(`HTTP ${res.status}, 표 없음`);
+    const text = pageText(html.replace(/<\/td>/g, " | "));
+    const events: CalendarEvent[] = [];
+    for (const [, mm, dd, time, name] of text.matchAll(
+      /(\d{2})\.(\d{2})\.\( . \) \| (\d{2}:\d{2}) \| \d{4}년 \d{1,2}월 (소비자물가동향|고용동향|산업활동동향) \|/g,
+    )) {
+      events.push({
+        time: Date.parse(`${year}-${mm}-${dd}T${time}:00+09:00`),
+        hasTime: true,
+        country: "한국",
+        title: KOSTAT_TITLES[name],
+        high: true,
+        forecast: null,
+        previous: null,
+        actual: null,
+      });
+    }
+    return events;
+  } catch (error) {
+    logEvent("error", "economic_calendar", "국가데이터처 보도계획 조회 실패", `${url} ${error}`);
+    return [];
+  }
+}
+
+// 관세청 수출입 현황 잠정치: 매월 11일(1~10일분)·21일(1~20일분), 휴일이면 다음 근무일 (기사로 확인, 2026-10-21).
+// 한국 공휴일 데이터가 아직 없어 주말만 피한다 — 공휴일이면 날짜가 틀릴 수 있어 "추정"으로 표시 (TODO 21번).
+function customsEvents(months: string[]): CalendarEvent[] {
+  return months.flatMap((month) =>
+    [
+      { day: "11", title: "수출입 현황 (1~10일 잠정치, 날짜 추정)" },
+      { day: "21", title: "수출입 현황 (1~20일 잠정치, 날짜 추정)" },
+    ].map(({ day, title }) => {
+      let date = `${month}-${day}`;
+      while ([0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay()))
+        date = new Date(Date.parse(date) + DAY_MS).toISOString().slice(0, 10);
+      return dateOnlyEvent(date, "한국", title);
+    }),
+  );
 }
 
 async function getFredReleaseDates(id: number, from: string, to: string) {
@@ -361,6 +469,7 @@ function lprEvents(months: string[], holidays: Map<number, Map<string, boolean> 
       high: true,
       forecast: null,
       previous: null,
+      actual: null,
     };
   });
 }
@@ -375,23 +484,24 @@ function dateOnlyEvent(date: string, country: string, title: string): CalendarEv
     high: true,
     forecast: null,
     previous: null,
+    actual: null,
   };
 }
 
-// 오늘(한국시간)부터 2주치, 시간순
+// 이틀 전(한국시간)부터 2주 뒤까지, 시간순. 지난 일정은 결과를 보여 주려고 남긴다.
 export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
   const now = Date.now();
-  const from = kstDate(now);
+  const from = kstDate(now - DAYS_BEHIND * DAY_MS);
   const to = kstDate(now + DAYS_AHEAD * DAY_MS);
 
   // 2주 범위가 연말을 넘을 수 있어 금통위는 올해·내년 페이지를 같이 본다 (내년은 비어 있을 수 있음).
-  const year = Number(from.slice(0, 4));
+  const year = Number(kstDate(now).slice(0, 4));
   const bokUrl = (y: number) =>
     `https://www.bok.or.kr/portal/singl/crncyPolicyDrcMtg/listYear.do?mtgSe=A&menuNo=200755&pYear=${y}`;
-  // 2주 범위가 걸치는 달(이번 달·다음 달)의 LPR 발표일. 연말이면 두 해의 휴일 데이터가 필요하다.
-  const lprMonths = [...new Set([from.slice(0, 7), to.slice(0, 7)])];
-  const lprYears = [...new Set(lprMonths.map((m) => Number(m.slice(0, 4))))];
-  const [forexFactory, fomc, bok, bokNextYear, ecb, boj, boe, chinaHolidays, ...fredDates] =
+  // 범위가 걸치는 달들 (매월 정해진 날에 나오는 LPR·관세청 잠정치·국가데이터처 보도계획용)
+  const months = [...new Set([from.slice(0, 7), kstDate(now).slice(0, 7), to.slice(0, 7)])];
+  const monthYears = [...new Set(months.map((m) => Number(m.slice(0, 4))))];
+  const [forexFactory, fomc, bok, bokNextYear, ecb, boj, boe, chinaHolidays, kostat, ...fredDates] =
     await Promise.all([
       getForexFactoryWeek(),
       getSchedulePage(
@@ -414,13 +524,21 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
         "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
         parseBoe,
       ),
-      Promise.all(lprYears.map(getChinaHolidays)),
+      Promise.all(monthYears.map(getChinaHolidays)),
+      // 보도계획은 올해 것만 있어서 다음 해 달은 건너뛴다.
+      Promise.all(
+        months
+          .filter((m) => Number(m.slice(0, 4)) === year)
+          .map((m) => getKostatEvents(year, Number(m.slice(5, 7)))),
+      ),
       ...FRED_RELEASES.map((release) => getFredReleaseDates(release.id, from, to)),
     ]);
 
-  // 이번 주는 Forex Factory가 같은 일정을 시각·예상치까지 줘서, 그 뒤만 공식 일정으로 채운다.
+  // Forex Factory가 덮는 이번 주는 같은 일정을 시각·예상치까지 줘서, 그 밖만 공식 일정으로 채운다.
   // 한국은 Forex Factory에 없어서 항상 공식 일정으로.
-  const later: CalendarEvent[] = [
+  const outsideForexFactory = (e: CalendarEvent) =>
+    e.time < forexFactory.covered.from || e.time > forexFactory.covered.until;
+  const official: CalendarEvent[] = [
     ...FRED_RELEASES.flatMap((release, i) =>
       fredDates[i].map((date) => ({
         time: easternTime(date, 8, 30),
@@ -430,6 +548,7 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
         high: true,
         forecast: null,
         previous: null,
+        actual: null,
       })),
     ),
     ...fomc.map((date) => ({
@@ -440,18 +559,33 @@ export async function getEconomicCalendar(): Promise<CalendarEvent[]> {
       high: true,
       forecast: null,
       previous: null,
+      actual: null,
     })),
     ...ecb.map((date) => dateOnlyEvent(date, "유럽", "ECB 기준금리 결정")),
     ...boj.map((date) => dateOnlyEvent(date, "일본", "일본은행 기준금리 결정")),
     ...boe.map((date) => dateOnlyEvent(date, "영국", "영국 기준금리 결정")),
-    ...lprEvents(lprMonths, new Map(lprYears.map((y, i) => [y, chinaHolidays[i]]))),
-  ].filter((e) => e.time > forexFactory.coveredUntil);
+    ...lprEvents(months, new Map(monthYears.map((y, i) => [y, chinaHolidays[i]]))),
+  ].filter(outsideForexFactory);
 
-  const korea = [...bok, ...bokNextYear].map((date) =>
-    dateOnlyEvent(date, "한국", "한국은행 기준금리 결정 (금통위)"),
-  );
+  const korea = [
+    ...[...bok, ...bokNextYear].map((date) =>
+      dateOnlyEvent(date, "한국", "한국은행 기준금리 결정 (금통위)"),
+    ),
+    ...kostat.flat(),
+    ...customsEvents(months),
+  ];
 
-  return [...forexFactory.events, ...later, ...korea]
+  const events = [...forexFactory.events, ...official, ...korea]
     .filter((e) => kstDate(e.time) >= from && kstDate(e.time) <= to)
     .sort((a, b) => a.time - b.time);
+
+  // 이미 발표된 미국 지표에 결과를 붙인다.
+  await Promise.all(
+    events
+      .filter((e) => e.country === "미국")
+      .map(async (e) => {
+        e.actual = await getUsActual(e.title, e.time);
+      }),
+  );
+  return events;
 }

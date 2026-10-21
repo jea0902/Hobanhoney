@@ -51,9 +51,9 @@ export default async function MarketCalendar() {
         </div>
       )}
       <p className="mt-2 text-[11px] text-gray-400">
-        한국시간 · ★★★ 중요 ★★ 보통 · 이번 주는 예상치·이전치 포함
+        한국시간 · ★★★ 중요 ★★ 보통 · 이번 주는 예상치·이전치 포함 · 결과는 미국만
         <br />
-        출처: Forex Factory, FRED, 연준, 한국은행, ECB, 일본은행, 영란은행
+        출처: Forex Factory, FRED, 연준, 한국은행, 국가데이터처, ECB, 일본은행, 영란은행
       </p>
     </div>
   );
@@ -67,9 +67,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
       : event.country === "미국"
         ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
         : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400";
+  // 날짜만 있는 일정은 그날이 지나야 끝난 것으로 본다.
+  const isPast = event.hasTime
+    ? event.time < Date.now()
+    : kstParts(event.time).date < kstParts(Date.now()).date;
 
   return (
-    <li className={`flex items-start gap-2 py-2 ${highlighted ? "" : "opacity-80"}`}>
+    <li
+      className={`flex items-start gap-2 py-2 ${isPast ? "opacity-50" : highlighted ? "" : "opacity-80"}`}
+    >
       <span className="w-10 shrink-0 pt-0.5 text-xs tabular-nums text-gray-400">
         {event.hasTime ? kstParts(event.time).clock : "—"}
       </span>
@@ -82,8 +88,13 @@ function EventRow({ event }: { event: CalendarEvent }) {
         >
           {event.title}
         </p>
-        {(event.forecast || event.previous) && (
+        {(event.actual || event.forecast || event.previous) && (
           <p className="text-[11px] text-gray-400">
+            {event.actual && (
+              <span className="mr-1.5 font-bold text-gray-900 dark:text-gray-100">
+                결과 {event.actual}
+              </span>
+            )}
             {event.forecast && `예상 ${event.forecast}`}
             {event.forecast && event.previous && " · "}
             {event.previous && `이전 ${event.previous}`}
