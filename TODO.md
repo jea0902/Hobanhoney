@@ -57,7 +57,6 @@
 - 27번: Supabase에서 `ai_equity_daily.withdrawn` 칸 추가 SQL 실행
 - 30번: Supabase에서 `wallet_trades`·`wallet_sync` 테이블 SQL 실행
 - 선택: 쓰지 않는 `presence` 테이블 삭제 (`drop table presence;`)
-- 38번: Supabase에서 `oi_alerts` 테이블 SQL 실행 (`supabase/schema.sql` 맨 아래)
 
 ## 끝난 일 · 포기한 일 (번호만)
 
