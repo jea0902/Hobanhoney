@@ -5,6 +5,7 @@ const TABS = [
   { key: "home", label: "홈", href: "/" },
   { key: "rankers", label: "랭커", href: "/rankers" },
   { key: "ai", label: "AI", href: "/ai" },
+  { key: "mm", label: "MM 펌핑 추적", href: "/mm" },
 ] as const;
 
 // 네이버 증권처럼 화면 전체 폭에 탭을 두고, 선택된 탭은 굵은 밑줄로 표시한다.
@@ -27,7 +28,7 @@ export default function Navbar({ active }: { active?: (typeof TABS)[number]["key
               <Link
                 key={tab.key}
                 href={tab.href}
-                className={`flex h-full items-center border-b-[3px] text-sm sm:text-lg ${
+                className={`flex h-full items-center whitespace-nowrap border-b-[3px] text-sm sm:text-lg ${
                   active === tab.key
                     ? "border-gray-900 font-bold text-gray-900 dark:border-gray-100 dark:text-gray-100"
                     : "border-transparent font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
