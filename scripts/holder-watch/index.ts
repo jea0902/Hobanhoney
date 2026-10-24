@@ -1,18 +1,20 @@
-// 체인 보유자 쏠림 (TODO 39번 B): 관찰 후보·OI 급증 알림 코인의 BSC·이더리움 토큰 이체를 15분마다 받아 지갑별로 누적하고,
-// 하루 한 번 "추적 시작 뒤 가장 많이 순매집한 지갑 10개"를 Supabase holder_daily에 남긴다.
-// 과거 이체 기록은 무료로 못 받아서(공개 노드는 최근 몇 시간까지만, Dune 무료 계정 불가) 앞으로 쌓는 방식.
-// 원본 이체는 하루 수만 건이라 저장하지 않고, 지갑별 누적값만 VM 파일(data/holders/)에 둔다.
-// 두 체인에 다 있는 토큰은 실제 거래가 어느 쪽인지 몰라서 양쪽을 따로 기록한다.
+// 체인 보유자 쏠림 (TODO 39번 B): 관찰 후보·OI 급증 알림 코인의 토큰을 체인별로 추적해서, 하루 한 번
+// "순매집 상위 100개 지갑"과 "잔고 상위 100개 지갑"이 총발행량의 몇 %인지 Supabase holder_daily에 남긴다.
+// - EVM 체인: 과거 이체 기록을 무료로 못 받아서(공개 노드는 최근 몇 시간~며칠까지만, Dune 무료 계정 불가) 15분마다 새 이체를
+//   받아 지갑별로 누적한다. 그래서 추적 시작 전부터 가만히 들고 있는 지갑은 움직이기 전까지 안 보인다.
+// - 솔라나: 보유자 전체 목록을 하루 한 번 통째로 받을 수 있어서(getProgramAccounts) 그날 목록과 첫 목록의 차이로 순매집을 센다.
+// 원본 이체·목록은 저장하지 않고, 지갑별 누적값만 VM 파일(data/holders/)에 둔다.
+// 여러 체인에 다 있는 토큰은 실제 거래가 어느 쪽인지 몰라서 체인마다 따로 기록한다.
 // 실행: npm run holder-watch (Oracle VM의 systemd 타이머가 15분마다 돌린다)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createClient } from "@supabase/supabase-js";
 import { EXCLUDED_WALLETS } from "./excluded.ts";
 
-// 노드 한도는 2026-10-25 직접 확인: 둘 다 한 번에 블록 5000개·토큰 주소 10개까지.
-// 받을 수 있는 과거는 BSC 약 1만 블록(약 1~2시간), 이더리움 5000 블록(약 16시간)까지 됐고 그보다 오래되면 거부.
+// 노드 한도는 2026-10-25 직접 확인: 한 번에 블록 5000개·토큰 주소 10개, 묶음 요청 50개까지 (Arbitrum 공식 노드는 200개에서 429).
+// maxBehind: 이보다 오래된 블록은 노드가 거부해서, VM이 그보다 오래 멈추면 그 구간은 영영 빠진다 (BSC 약 2시간, 이더리움 약 13시간).
 // headMargin: 노드마다 최신 블록이 조금씩 달라서 그만큼 앞까지만 받는다
-const CHAINS = {
+const EVM_CHAINS = {
   bsc: {
     rpc: "https://bsc-rpc.publicnode.com",
     platform: "binance-smart-chain",
@@ -25,65 +27,139 @@ const CHAINS = {
     maxBehind: 4000,
     headMargin: 3,
   },
+  base: {
+    rpc: "https://base-rpc.publicnode.com",
+    platform: "base",
+    maxBehind: 40000,
+    headMargin: 10,
+  },
+  // publicnode의 Arbitrum은 최근 블록도 거부해서 공식 노드를 쓴다
+  arbitrum: {
+    rpc: "https://arb1.arbitrum.io/rpc",
+    platform: "arbitrum-one",
+    maxBehind: 200000,
+    headMargin: 20,
+  },
+  polygon: {
+    rpc: "https://polygon-bor-rpc.publicnode.com",
+    platform: "polygon-pos",
+    maxBehind: 15000,
+    headMargin: 10,
+  },
+  avalanche: {
+    rpc: "https://avalanche-c-chain-rpc.publicnode.com",
+    platform: "avalanche",
+    maxBehind: 15000,
+    headMargin: 5,
+  },
+  optimism: {
+    rpc: "https://optimism-rpc.publicnode.com",
+    platform: "optimistic-ethereum",
+    maxBehind: 4000,
+    headMargin: 10,
+  },
 };
-type Chain = keyof typeof CHAINS;
+type EvmChain = keyof typeof EVM_CHAINS;
+type Chain = EvmChain | "sol";
+const SOLANA_RPC = "https://api.mainnet-beta.solana.com"; // publicnode 솔라나는 이 요청에 개인 토큰을 요구함
 
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const MAX_RANGE = 5000;
 const MAX_ADDRESSES = 10;
+const BATCH = 50;
+const TOP = 100;
+const LOOKUP_VERSION = 2; // 체인을 늘릴 때 올리면 이미 넣은 종목도 컨트랙트를 다시 찾는다
 const DIR = "data/holders";
 const DAY = 86_400_000;
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
+interface TokenChain {
+  address: string; // EVM 컨트랙트(소문자) 또는 솔라나 mint
+  decimals: number;
+  since?: string; // 이 체인 추적 시작일 (없으면 종목 추적 시작일)
+}
+
 interface Token {
   coingeckoId: string | null;
-  chains: Partial<Record<Chain, { address: string; decimals: number }>>; // 못 찾으면 비어 있음
+  chains: Partial<Record<Chain, TokenChain>>; // 못 찾으면 비어 있음
   since: string; // 추적 시작일 (UTC)
   checkedAt: number; // 못 찾은 종목은 7일 뒤 다시 찾아봄
+  lookup?: number;
 }
 
 interface State {
-  lastBlock: Partial<Record<Chain, number>>;
+  lastBlock: Partial<Record<EvmChain, number>>;
   lastSummary: string | null;
   tokens: Record<string, Token>;
-  // 날짜 → "종목:체인" → 그날 움직인 지갑 수·처음 본 지갑 수
+  // 날짜 → "종목:체인" → 그날 움직인 지갑 수·처음 본 지갑 수 (EVM만, 솔라나는 목록끼리 비교)
   daily: Record<string, Record<string, { active: number; fresh: number }>>;
   // 날짜 → 체인 → VM이 멈춰서 못 받은 블록 수
-  missed: Record<string, Partial<Record<Chain, number>>>;
+  missed: Record<string, Partial<Record<EvmChain, number>>>;
 }
 
-// 지갑 → [받은 양, 보낸 양, 처음 본 날, 마지막으로 본 날]
-type Wallets = Record<string, [number, number, string, string]>;
+// EVM 지갑 → [받은 양, 보낸 양, 처음 본 날, 마지막으로 본 날, 잔고(요약 때 조회), 컨트랙트 여부]
+type Wallets = Record<string, [number, number, string, string, number?, boolean?]>;
+
+interface Ranked {
+  address: string;
+  net: number;
+  balance: number;
+}
 
 const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-const walletFile = (symbol: string, chain: Chain) => `${DIR}/${symbol}-${chain}.json`;
+const walletFile = (symbol: string, chain: Chain, suffix = "") =>
+  `${DIR}/${symbol}-${chain}${suffix}.json`;
 
 function readJson<T>(file: string, fallback: T): T {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : fallback;
 }
 
-async function rpc(chain: Chain, method: string, params: unknown[]) {
+async function post(url: string, body: unknown) {
   for (let attempt = 1; attempt <= 5; attempt++) {
-    const res = await fetch(CHAINS[chain].rpc, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      body: JSON.stringify(body),
     });
-    // 한도 위반(주소 10개 초과 등)은 403과 함께 오류 내용이 와서, 다시 보내지 않고 바로 알린다
-    const body = await res.json().catch(() => null);
-    if (body?.error) throw new Error(`${chain} ${method}: ${body.error.message}`);
-    if (res.ok) return body.result;
-    await sleep(10_000 * attempt);
+    // 한도 위반(주소 10개 초과 등)은 403과 함께 오류 내용이 와서, 다시 보내지 않고 바로 알린다. 429는 잠시 뒤 다시.
+    const json = await res.json().catch(() => null);
+    if (res.ok || (json?.error && res.status !== 429)) return json;
+    await sleep(15_000 * attempt);
   }
-  throw new Error(`${chain} RPC 응답 없음: ${method}`);
+  throw new Error(`RPC 응답 없음: ${url}`);
 }
 
-// 토큰 컨트랙트 함수 호출 (인자는 주소 하나까지)
-async function callToken(chain: Chain, token: string, selector: string, address?: string) {
-  const data = selector + (address ? address.slice(2).padStart(64, "0") : "");
-  return BigInt(await rpc(chain, "eth_call", [{ to: token, data }, "latest"]));
+async function rpc(url: string, method: string, params: unknown[]) {
+  const json = await post(url, { jsonrpc: "2.0", id: 1, method, params });
+  if (json.error) throw new Error(`${method}: ${json.error.message}`);
+  return json.result;
 }
+
+// 같은 요청 여러 개를 50개씩 묶어 보낸다 (지갑 잔고·코드 조회가 하루 수천 번이라)
+async function rpcBatch(url: string, calls: { method: string; params: unknown[] }[]) {
+  const results: unknown[] = [];
+  for (let i = 0; i < calls.length; i += BATCH) {
+    const body = calls
+      .slice(i, i + BATCH)
+      .map((c, j) => ({ jsonrpc: "2.0", id: j, method: c.method, params: c.params }));
+    const json = (await post(url, body)) as {
+      id: number;
+      result?: unknown;
+      error?: { message: string };
+    }[];
+    if (!Array.isArray(json))
+      throw new Error(`묶음 요청 실패: ${JSON.stringify(json).slice(0, 200)}`);
+    for (const item of json.sort((a, b) => a.id - b.id)) {
+      if (item.error) throw new Error(`묶음 요청 오류: ${item.error.message}`);
+      results.push(item.result);
+    }
+    await sleep(300);
+  }
+  return results;
+}
+
+const balanceOfData = (address: string) => `0x70a08231${address.slice(2).padStart(64, "0")}`;
 
 async function json(url: string) {
   for (let attempt = 1; attempt <= 5; attempt++) {
@@ -119,11 +195,23 @@ async function findToken(symbol: string, baseAsset: string) {
     const cgPrice = detail.market_data?.current_price?.usd;
     if (!cgPrice || Math.abs(cgPrice / binancePrice - 1) > 0.3) continue;
     const chains: Token["chains"] = {};
-    for (const chain of Object.keys(CHAINS) as Chain[]) {
-      const address = detail.platforms[CHAINS[chain].platform]?.toLowerCase();
+    for (const chain of Object.keys(EVM_CHAINS) as EvmChain[]) {
+      const address = detail.platforms[EVM_CHAINS[chain].platform]?.toLowerCase();
       if (!address) continue;
-      const decimals = Number(await callToken(chain, address, "0x313ce567"));
+      const decimals = Number(
+        await rpc(EVM_CHAINS[chain].rpc, "eth_call", [
+          { to: address, data: "0x313ce567" },
+          "latest",
+        ]),
+      );
       chains[chain] = { address, decimals };
+    }
+    const mint = detail.platforms.solana;
+    if (mint) {
+      const supply = (await rpc(SOLANA_RPC, "getTokenSupply", [mint])) as {
+        value: { decimals: number };
+      };
+      chains.sol = { address: mint, decimals: supply.value.decimals };
     }
     if (Object.keys(chains).length > 0) return { coingeckoId: match.id, chains };
   }
@@ -155,21 +243,36 @@ async function addTokens(state: State) {
   const symbols = await loadSymbols();
   const todo = [...symbols].filter((s) => {
     const token = state.tokens[s];
-    const empty = token && Object.keys(token.chains).length === 0;
-    return !token || (empty && Date.now() - token.checkedAt > 7 * DAY);
+    if (!token) return true;
+    if (token.lookup !== LOOKUP_VERSION) return true;
+    return Object.keys(token.chains).length === 0 && Date.now() - token.checkedAt > 7 * DAY;
   });
   if (todo.length === 0) return;
   const info = (await json("https://fapi.binance.com/fapi/v1/exchangeInfo")) as {
     symbols: { symbol: string; baseAsset: string }[];
   };
+  const today = toDate(Date.now());
   for (const symbol of todo) {
+    const old = state.tokens[symbol];
     const baseAsset = info.symbols.find((s) => s.symbol === symbol)?.baseAsset;
     const found = baseAsset
       ? await findToken(symbol, baseAsset)
       : { coingeckoId: null, chains: {} };
-    state.tokens[symbol] = { ...found, since: toDate(Date.now()), checkedAt: Date.now() };
-    const where = Object.keys(found.chains).join("·") || "BSC·이더리움 토큰 못 찾음";
-    console.log(`추적 추가: ${symbol} → ${where} (${found.coingeckoId ?? "-"})`);
+    // 이미 추적 중인 체인은 그대로 두고(누적이 끊기지 않게), 새로 찾은 체인만 오늘부터 추적
+    const chains: Token["chains"] = { ...old?.chains };
+    for (const [chain, entry] of Object.entries(found.chains) as [Chain, TokenChain][]) {
+      chains[chain] ??= old ? { ...entry, since: today } : entry;
+    }
+    state.tokens[symbol] = {
+      coingeckoId: found.coingeckoId ?? old?.coingeckoId ?? null,
+      chains,
+      since: old?.since ?? today,
+      checkedAt: Date.now(),
+      lookup: LOOKUP_VERSION,
+    };
+    console.log(
+      `추적: ${symbol} → ${Object.keys(chains).join("·") || "토큰 못 찾음"} (${found.coingeckoId ?? "-"})`,
+    );
     writeFileSync(`${DIR}/state.json`, JSON.stringify(state));
     await sleep(6000);
   }
@@ -177,15 +280,10 @@ async function addTokens(state: State) {
 
 type Log = { address: string; topics: string[]; data: string; blockTimestamp: string };
 
-// 범위가 너무 커서 노드가 거절하면 반으로 나눠 다시 받는다
-async function getLogs(
-  chain: Chain,
-  addresses: string[],
-  from: number,
-  to: number,
-): Promise<Log[]> {
+// 범위가 너무 크거나 결과가 너무 많아서 노드가 거절하면 반으로 나눠 다시 받는다
+async function getLogs(url: string, addresses: string[], from: number, to: number): Promise<Log[]> {
   try {
-    return await rpc(chain, "eth_getLogs", [
+    return await rpc(url, "eth_getLogs", [
       {
         address: addresses,
         topics: [TRANSFER],
@@ -197,16 +295,17 @@ async function getLogs(
     if (to - from < 100) throw error;
     const middle = Math.floor((from + to) / 2);
     return [
-      ...(await getLogs(chain, addresses, from, middle)),
-      ...(await getLogs(chain, addresses, middle + 1, to)),
+      ...(await getLogs(url, addresses, from, middle)),
+      ...(await getLogs(url, addresses, middle + 1, to)),
     ];
   }
 }
 
-async function collect(state: State, chain: Chain) {
-  const { maxBehind, headMargin } = CHAINS[chain];
+async function collect(state: State, chain: EvmChain) {
+  const { rpc: url, maxBehind, headMargin } = EVM_CHAINS[chain];
   const tracked = Object.entries(state.tokens).filter(([, t]) => t.chains[chain]);
-  const head = parseInt(await rpc(chain, "eth_blockNumber", []), 16) - headMargin;
+  if (tracked.length === 0) return;
+  const head = parseInt(await rpc(url, "eth_blockNumber", []), 16) - headMargin;
   const last = state.lastBlock[chain];
   let from = last === undefined ? head - 100 : last + 1;
   if (head - from > maxBehind) {
@@ -216,10 +315,7 @@ async function collect(state: State, chain: Chain) {
     console.log(`${chain} 못 받은 블록 ${missed}개 (노드가 최근 블록까지만 줌)`);
     from = head - maxBehind;
   }
-  if (tracked.length === 0 || from > head) {
-    state.lastBlock[chain] = head;
-    return;
-  }
+  if (from > head) return;
 
   const bySymbol = new Map(tracked.map(([symbol, t]) => [t.chains[chain]!.address, symbol]));
   const wallets = new Map(
@@ -231,7 +327,7 @@ async function collect(state: State, chain: Chain) {
     const end = Math.min(start + MAX_RANGE - 1, head);
     const logs: Log[] = [];
     for (let i = 0; i < addresses.length; i += MAX_ADDRESSES) {
-      logs.push(...(await getLogs(chain, addresses.slice(i, i + MAX_ADDRESSES), start, end)));
+      logs.push(...(await getLogs(url, addresses.slice(i, i + MAX_ADDRESSES), start, end)));
     }
     for (const log of logs) {
       const symbol = bySymbol.get(log.address.toLowerCase());
@@ -264,47 +360,249 @@ async function collect(state: State, chain: Chain) {
   console.log(`${chain} 블록 ${from}~${head} 이체 ${count}건, 추적 ${tracked.length}종목`);
 }
 
+// 정렬된 후보에서 컨트랙트(풀·브리지·거래소 컨트랙트·멀티시그 등)를 빼고 위에서 100개. isContract는 모르는 것만 조회해서 채운다.
+async function topWallets(
+  sorted: Ranked[],
+  isContract: (address: string) => boolean | undefined,
+  check: (addresses: string[]) => Promise<void>,
+) {
+  const picked: Ranked[] = [];
+  let excluded = 0;
+  for (let i = 0; i < sorted.length && picked.length < TOP; i += BATCH) {
+    const chunk = sorted.slice(i, i + BATCH);
+    const unknown = chunk.filter((w) => isContract(w.address) === undefined).map((w) => w.address);
+    if (unknown.length > 0) await check(unknown);
+    for (const wallet of chunk) {
+      if (picked.length === TOP) break;
+      if (isContract(wallet.address)) excluded++;
+      else picked.push(wallet);
+    }
+  }
+  return { picked, excluded };
+}
+
+interface Summary {
+  wallets: number;
+  active: number;
+  fresh: number;
+  net: Ranked[]; // 순매집 상위 100 (컨트랙트 제외)
+  holders: Ranked[]; // 잔고 상위 100 (컨트랙트 제외)
+  excluded: number;
+  supply: number;
+}
+
+async function summarizeEvm(
+  state: State,
+  symbol: string,
+  chain: EvmChain,
+  token: TokenChain,
+  date: string,
+): Promise<Summary> {
+  const url = EVM_CHAINS[chain].rpc;
+  const book = readJson<Wallets>(walletFile(symbol, chain), {});
+  // 지난 요약 뒤에 움직인 지갑만 잔고를 다시 조회한다 (안 움직였으면 잔고도 그대로)
+  const stale = Object.keys(book).filter(
+    (a) => book[a][4] === undefined || state.lastSummary === null || book[a][3] > state.lastSummary,
+  );
+  const balances = await rpcBatch(
+    url,
+    stale.map((a) => ({
+      method: "eth_call",
+      params: [{ to: token.address, data: balanceOfData(a) }, "latest"],
+    })),
+  );
+  // 잔고 함수가 이상한 토큰은 "0x"를 돌려줘서 0으로 본다
+  stale.forEach((a, i) => {
+    const raw = balances[i] as string;
+    book[a][4] = raw && raw !== "0x" ? Number(BigInt(raw)) / 10 ** token.decimals : 0;
+  });
+
+  const candidates = Object.entries(book)
+    .filter(([a]) => a !== token.address && !EXCLUDED_WALLETS.has(a))
+    .map(([address, w]) => ({ address, net: w[0] - w[1], balance: w[4] ?? 0 }));
+  const isContract = (a: string) => book[a][5];
+  const check = async (addresses: string[]) => {
+    const codes = await rpcBatch(
+      url,
+      addresses.map((a) => ({ method: "eth_getCode", params: [a, "latest"] })),
+    );
+    // 0xef0100으로 시작하는 코드는 일반 지갑이 다른 코드를 위임한 것(EIP-7702)이라 지갑으로 본다
+    addresses.forEach((a, i) => {
+      const code = codes[i] as string;
+      book[a][5] = code !== "0x" && !code.startsWith("0xef0100");
+    });
+  };
+  const net = await topWallets(
+    [...candidates].sort((a, b) => b.net - a.net),
+    isContract,
+    check,
+  );
+  const holders = await topWallets(
+    [...candidates].sort((a, b) => b.balance - a.balance),
+    isContract,
+    check,
+  );
+  writeFileSync(walletFile(symbol, chain), JSON.stringify(book));
+
+  const supplyRaw = await rpc(url, "eth_call", [
+    { to: token.address, data: "0x18160ddd" },
+    "latest",
+  ]);
+  const counts = state.daily[date]?.[`${symbol}:${chain}`];
+  return {
+    wallets: Object.keys(book).length,
+    active: counts?.active ?? 0,
+    fresh: counts?.fresh ?? 0,
+    net: net.picked,
+    holders: holders.picked,
+    excluded: Object.values(book).filter((w) => w[5]).length,
+    supply: Number(BigInt(supplyRaw)) / 10 ** token.decimals,
+  };
+}
+
+const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function base58(hex: string) {
+  let n = BigInt(`0x${hex}`);
+  let out = "";
+  while (n > BigInt(0)) {
+    out = BASE58[Number(n % BigInt(58))] + out;
+    n /= BigInt(58);
+  }
+  for (let i = 0; i < hex.length && hex.slice(i, i + 2) === "00"; i += 2) out = `1${out}`;
+  return out;
+}
+
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+// 솔라나 토큰 보유자 전체: 지갑(owner, 16진수) → 잔고. 한 지갑이 토큰 계정을 여러 개 가질 수 있어서 합친다.
+async function solanaHolders(mint: string, decimals: number) {
+  const info = (await rpc(SOLANA_RPC, "getAccountInfo", [
+    mint,
+    { encoding: "base64", dataSlice: { offset: 0, length: 0 } },
+  ])) as {
+    value: { owner: string };
+  };
+  const program = info.value.owner; // 기존 토큰 프로그램 또는 Token-2022
+  // 토큰 계정: 앞 32바이트 mint, 다음 32바이트 owner, 다음 8바이트 잔고. Token-2022의 확장 계정은 165번째 바이트가 2(계정 종류)
+  const filterSets: unknown[][] = [[{ dataSize: 165 }, { memcmp: { offset: 0, bytes: mint } }]];
+  if (program !== TOKEN_PROGRAM)
+    filterSets.push([
+      { memcmp: { offset: 0, bytes: mint } },
+      { memcmp: { offset: 165, bytes: "3" } },
+    ]);
+  const holders = new Map<string, number>();
+  for (const filters of filterSets) {
+    const accounts = (await rpc(SOLANA_RPC, "getProgramAccounts", [
+      program,
+      { encoding: "base64", dataSlice: { offset: 32, length: 40 }, filters },
+    ])) as { account: { data: [string, string] } }[];
+    for (const { account } of accounts) {
+      const bytes = Buffer.from(account.data[0], "base64");
+      const owner = bytes.subarray(0, 32).toString("hex");
+      const amount = Number(bytes.readBigUInt64LE(32)) / 10 ** decimals;
+      if (amount > 0) holders.set(owner, (holders.get(owner) ?? 0) + amount);
+    }
+    await sleep(5000);
+  }
+  const supply = (await rpc(SOLANA_RPC, "getTokenSupply", [mint])) as {
+    value: { uiAmount: number };
+  };
+  return { holders, supply: supply.value.uiAmount };
+}
+
+// 첫 목록(추적 시작)과 비교한 잔고 변화가 순매집, 어제 목록과 비교해 새 지갑·움직인 지갑을 센다
+async function summarizeSolana(symbol: string, token: TokenChain): Promise<Summary> {
+  const { holders, supply } = await solanaHolders(token.address, token.decimals);
+  const now = Object.fromEntries(holders);
+  const firstFile = walletFile(symbol, "sol", "-first");
+  const lastFile = walletFile(symbol, "sol", "-last");
+  if (!existsSync(firstFile)) writeFileSync(firstFile, JSON.stringify(now));
+  const first = readJson<Record<string, number>>(firstFile, {});
+  const last = readJson<Record<string, number>>(lastFile, now);
+  const contracts = readJson<Record<string, boolean>>(walletFile(symbol, "sol", "-contracts"), {});
+
+  const candidates = Object.entries(now).map(([hex, balance]) => ({
+    address: hex,
+    net: balance - (first[hex] ?? 0),
+    balance,
+  }));
+  const isContract = (hex: string) => contracts[hex];
+  // 지갑 주소의 계정이 시스템 프로그램 소유면 사람 지갑, 아니면(풀·프로그램 주소, 계정 없음) 컨트랙트로 본다
+  const check = async (hexes: string[]) => {
+    const result = (await rpc(SOLANA_RPC, "getMultipleAccounts", [
+      hexes.map(base58),
+      { encoding: "base64", dataSlice: { offset: 0, length: 0 } },
+    ])) as { value: ({ owner: string } | null)[] };
+    hexes.forEach((hex, i) => (contracts[hex] = result.value[i]?.owner !== SYSTEM_PROGRAM));
+    await sleep(1000);
+  };
+  const net = await topWallets(
+    [...candidates].sort((a, b) => b.net - a.net),
+    isContract,
+    check,
+  );
+  const holdersTop = await topWallets(
+    [...candidates].sort((a, b) => b.balance - a.balance),
+    isContract,
+    check,
+  );
+  writeFileSync(walletFile(symbol, "sol", "-contracts"), JSON.stringify(contracts));
+  writeFileSync(lastFile, JSON.stringify(now));
+
+  const changed = Object.keys(now).filter((hex) => now[hex] !== last[hex]).length;
+  const gone = Object.keys(last).filter((hex) => !(hex in now)).length;
+  const toAddress = (w: Ranked) => ({ ...w, address: base58(w.address) });
+  return {
+    wallets: holders.size,
+    active: changed + gone,
+    fresh: Object.keys(now).filter((hex) => !(hex in last)).length,
+    net: net.picked.map(toAddress),
+    holders: holdersTop.picked.map(toAddress),
+    excluded: Object.values(contracts).filter(Boolean).length,
+    supply,
+  };
+}
+
 // 어제(UTC)까지 하루 요약을 Supabase에 남긴다. 잔고는 요약하는 시점(다음 날 새벽)의 값.
 async function summarize(state: State) {
   const yesterday = toDate(Date.now() - DAY);
   if (state.lastSummary !== null && state.lastSummary >= yesterday) return;
   for (const [symbol, token] of Object.entries(state.tokens)) {
-    if (token.since > yesterday) continue;
-    for (const [chain, { address: tokenAddress, decimals }] of Object.entries(token.chains) as [
-      Chain,
-      { address: string; decimals: number },
-    ][]) {
-      const book = readJson<Wallets>(walletFile(symbol, chain), {});
-      const supply = Number(await callToken(chain, tokenAddress, "0x18160ddd")) / 10 ** decimals;
-      const top = Object.entries(book)
-        .filter(([address]) => address !== tokenAddress && !EXCLUDED_WALLETS.has(address))
-        .map(([address, [received, sent]]) => ({ address, net: received - sent }))
-        .sort((a, b) => b.net - a.net)
-        .slice(0, 10);
-      const top10: { address: string; net: number; balance: number; contract: boolean }[] = [];
-      for (const wallet of top) {
-        const raw = await callToken(chain, tokenAddress, "0x70a08231", wallet.address);
-        // 컨트랙트(풀·브리지·멀티시그 등)인지 표시만 한다. 제외 여부는 손으로 확인한 뒤 excluded.ts에
-        const contract = (await rpc(chain, "eth_getCode", [wallet.address, "latest"])) !== "0x";
-        top10.push({ ...wallet, balance: Number(raw) / 10 ** decimals, contract });
+    for (const [chain, entry] of Object.entries(token.chains) as [Chain, TokenChain][]) {
+      const since = entry.since ?? token.since;
+      // EVM은 그날 하루를 다 받은 뒤라야 의미가 있고, 솔라나는 목록을 받는 날부터 시작
+      if (chain !== "sol" && since > yesterday) continue;
+      let summary: Summary;
+      try {
+        summary =
+          chain === "sol"
+            ? await summarizeSolana(symbol, entry)
+            : await summarizeEvm(state, symbol, chain, entry, yesterday);
+      } catch (error) {
+        console.log(`${symbol} ${chain} 요약 실패: ${(error as Error).message}`);
+        continue;
       }
-      const sum = (key: "net" | "balance") => top10.reduce((s, w) => s + w[key], 0);
-      const counts = state.daily[yesterday]?.[`${symbol}:${chain}`];
+      const sum = (list: Ranked[], key: "net" | "balance") => list.reduce((s, w) => s + w[key], 0);
+      const pct = (value: number) => (summary.supply > 0 ? value / summary.supply : null);
       const { error } = await supabase.from("holder_daily").upsert(
         {
           date: yesterday,
           symbol,
           chain,
-          token_address: tokenAddress,
+          token_address: entry.address,
           coingecko_id: token.coingeckoId,
-          tracked_since: token.since,
-          wallets: Object.keys(book).length,
-          active_wallets: counts?.active ?? 0,
-          new_wallets: counts?.fresh ?? 0,
-          top10_net_pct: supply > 0 ? sum("net") / supply : null,
-          top10_balance_pct: supply > 0 ? sum("balance") / supply : null,
-          top10,
-          missed_blocks: state.missed[yesterday]?.[chain] ?? 0,
+          tracked_since: chain === "sol" && since > yesterday ? yesterday : since,
+          wallets: summary.wallets,
+          active_wallets: summary.active,
+          new_wallets: summary.fresh,
+          net100_pct: pct(sum(summary.net, "net")),
+          net100_balance_pct: pct(sum(summary.net, "balance")),
+          holder100_pct: pct(sum(summary.holders, "balance")),
+          contracts_excluded: summary.excluded,
+          // 손 확인용으로 각 목록의 위 10개만 (100개 전부는 1년이면 Supabase 무료 용량을 넘김)
+          top_wallets: { net: summary.net.slice(0, 10), holders: summary.holders.slice(0, 10) },
+          missed_blocks: chain === "sol" ? 0 : (state.missed[yesterday]?.[chain] ?? 0),
         },
         { onConflict: "date,symbol,chain" },
       );
@@ -326,6 +624,15 @@ const state = readJson<State>(`${DIR}/state.json`, {
   missed: {},
 });
 await addTokens(state);
-for (const chain of Object.keys(CHAINS) as Chain[]) await collect(state, chain);
+for (const chain of Object.keys(EVM_CHAINS) as EvmChain[]) {
+  try {
+    await collect(state, chain);
+  } catch (error) {
+    // 한 체인 노드가 잠깐 막혀도 다른 체인은 계속 받는다 (못 받은 구간은 다음 실행에서 이어 받음)
+    console.log(`${chain} 이체 받기 실패: ${(error as Error).message}`);
+  }
+}
+// 요약이 실패해도 받은 블록 위치는 남겨야 같은 이체를 두 번 세지 않는다
+writeFileSync(`${DIR}/state.json`, JSON.stringify(state));
 await summarize(state);
 writeFileSync(`${DIR}/state.json`, JSON.stringify(state));

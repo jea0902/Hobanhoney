@@ -32,6 +32,19 @@ export async function getLatestWatchlist() {
   return data as WatchlistRow[];
 }
 
+// 결과가 채워진 지난 후보 (펌핑한 것·안 한 것 모두). 최근 300건까지만 화면에 보인다.
+export async function getWatchlistResults() {
+  const { data, error } = await getSupabase()
+    .from("mm_watchlist")
+    .select("*")
+    .not("pumped_30d", "is", null)
+    .order("date", { ascending: false })
+    .order("account_ratio_60d", { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  return data as WatchlistRow[];
+}
+
 // 결과가 채워진 기록 중 30일 안에 펌핑이 시작된 비율. 행이 많아질 수 있어 개수만 센다.
 export async function getWatchlistHitRate() {
   const count = async (pumpedOnly: boolean) => {

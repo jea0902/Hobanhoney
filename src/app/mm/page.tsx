@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getOiAlerts, summarize } from "@/lib/oiAlerts";
-import { getLatestWatchlist, getWatchlistHitRate } from "@/lib/mmWatchlist";
+import { getLatestWatchlist, getWatchlistHitRate, getWatchlistResults } from "@/lib/mmWatchlist";
 import { getLatestHolderDaily } from "@/lib/holderDaily";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,22 @@ function formatPercent(ratio: number | null, digits = 1) {
   return `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(digits)}%`;
 }
 
+// 총발행량 대비 비율 (부호 없이)
+function formatShare(ratio: number | null) {
+  return ratio === null ? "—" : `${(ratio * 100).toFixed(2)}%`;
+}
+
+const CHAIN_NAMES: Record<string, string> = {
+  bsc: "BSC",
+  eth: "이더리움",
+  base: "Base",
+  arbitrum: "Arbitrum",
+  polygon: "Polygon",
+  avalanche: "Avalanche",
+  optimism: "Optimism",
+  sol: "솔라나",
+};
+
 function upDownColor(ratio: number) {
   return ratio >= 0 ? "text-red-500" : "text-blue-500";
 }
@@ -43,6 +59,7 @@ export default async function MmPage() {
   const now = Date.now();
   const watchlist = await getLatestWatchlist();
   const watchlistHit = await getWatchlistHitRate();
+  const watchlistResults = await getWatchlistResults();
   const holders = await getLatestHolderDaily();
 
   return (
@@ -308,24 +325,114 @@ export default async function MmPage() {
         )}
         {watchlist.length > 0 && (
           <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-            {watchlist[0].date} (UTC) 일봉까지 계산, {watchlist.length}종목. 지난 후보의 실제 결과:{" "}
-            {watchlistHit.done === 0
-              ? "기록 38일 뒤부터 집계함."
-              : `${watchlistHit.done}건 중 ${watchlistHit.pumped}건이 30일 안 펌핑 시작 (${((watchlistHit.pumped / watchlistHit.done) * 100).toFixed(1)}%). 같은 종목이 매일 다시 기록되므로 건수는 날짜 기준임.`}
+            {watchlist[0].date} (UTC) 일봉까지 계산, {watchlist.length}종목.
           </p>
+        )}
+
+        <h3 className="mb-1 mt-6 text-sm font-bold text-gray-900 dark:text-gray-100 sm:text-base">
+          지난 후보 결과
+        </h3>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+          후보로 기록된 날로부터 38일이 지나면 결과를 채움 (펌핑한 것과 안 한 것 모두). 펌핑 = 다음
+          날부터 30일 안의 어느 날, 그날 종가 대비 이후 7일 안 종가 2배. 최고 종가 = 다음 날부터
+          37일 안 가장 높은 종가. 같은 종목이 매일 다시 기록되므로 건수는 날짜 기준임.
+          {watchlistHit.done > 0 &&
+            ` 지금까지 ${watchlistHit.done}건 중 ${watchlistHit.pumped}건 펌핑 (${((watchlistHit.pumped / watchlistHit.done) * 100).toFixed(1)}%, 분석 때 약 11%·전체 평균 4.9%).`}
+        </p>
+        {watchlistResults.length === 0 ? (
+          <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+            첫 결과는 2026-12-01 무렵부터 나옴 (2026-10-23 후보 + 38일).
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
+                  <th className="px-4 py-2.5 text-left font-medium">기준일</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left font-medium sm:px-3">
+                    종목
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    개인 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    큰손 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    종가
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    37일 안 최고 종가
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    30일 안 펌핑
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlistResults.map((row) => {
+                  const best =
+                    row.max_close_37d === null ? null : row.max_close_37d / row.price - 1;
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                    >
+                      <td className="whitespace-nowrap px-3 py-2.5 text-gray-700 dark:text-gray-300 sm:px-4">
+                        {row.date}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-3">
+                        {row.symbol.replace(/USDT$/, "")}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                        {row.account_ratio_60d.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                        {row.top_ratio_60d.toFixed(2)}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                        {Number(row.price.toPrecision(5))}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-2 py-2.5 text-right sm:px-3 ${best === null ? "text-gray-400" : upDownColor(best)}`}
+                      >
+                        {formatPercent(best)}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3 ${row.pumped_30d ? "text-red-500" : "text-gray-400"}`}
+                      >
+                        {row.pumped_30d ? "펌핑" : "아님"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
           체인 보유자 쏠림
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-          관찰 후보와 OI 급증 알림 코인 중 BSC·이더리움 토큰의 이체를 15분마다 받아 지갑별로 누적함.
-          두 체인에 다 있는 토큰은 실제 거래가 어느 쪽인지 몰라서 양쪽을 따로 표시함. 순매집 = 추적
-          시작 뒤 받은 양 − 보낸 양. 상위 10개 지갑의 순매집과 지금 잔고를 총발행량 대비로 표시함.
-          과거 이체 기록은 무료로 받을 수 없어서 추적 시작일 이후만 보이고, 그 전부터 들고 있던
-          지갑은 움직이기 전까지 안 보임. 거래소·DEX 풀 주소가 섞여 있을 수 있음 (손으로 확인해 제외
-          중).
+          관찰 후보와 OI 급증 알림 코인의 토큰을
+          BSC·이더리움·Base·Arbitrum·Polygon·Avalanche·Optimism·솔라나에서 추적함. 여러 체인에 있는
+          토큰은 실제 거래가 어느 쪽인지 몰라서 체인마다 따로 표시함. 상위 지갑은 모두{" "}
+          <span className="font-medium">상위 100개 지갑</span>이고, 컨트랙트(DEX 풀·브리지·거래소
+          컨트랙트 등)는 빼고 셈.
         </p>
+        <ul className="mb-3 list-disc space-y-1 pl-5 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+          <li>
+            순매집 상위 100 = 추적 시작 뒤 (받은 양 − 보낸 양)이 가장 큰 지갑 100개의 순매집 합 ÷
+            총발행량. 그 옆 칸은 이 100개 지갑의 지금 잔고 합 ÷ 총발행량.
+          </li>
+          <li>잔고 상위 100 = 지금 가장 많이 들고 있는 지갑 100개의 잔고 합 ÷ 총발행량.</li>
+          <li>
+            솔라나 외 체인은 과거 이체 기록을 무료로 받을 수 없어서 15분마다 새 이체를 쌓는
+            방식이라, 추적 시작 전부터 가만히 들고 있던 지갑은 움직이기 전까지 안 보임. 솔라나는
+            보유자 전체 목록을 매일 받아 첫날 목록과 비교함.
+          </li>
+        </ul>
         {holders.length === 0 ? (
           <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
             2026-10-25 추적 시작. 첫 하루 요약은 다음 날 새벽(UTC)에 기록됨.
@@ -336,12 +443,17 @@ export default async function MmPage() {
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
                   <th className="px-4 py-2.5 text-left font-medium">종목</th>
-                  <th className="px-2 py-2.5 text-left font-medium sm:px-3">체인</th>
-                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    상위 10 순매집
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left font-medium sm:px-3">
+                    체인
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    상위 10 잔고
+                    순매집 상위 100
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    그 지갑 잔고
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    잔고 상위 100
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     새 지갑
@@ -364,17 +476,16 @@ export default async function MmPage() {
                       {row.symbol.replace(/USDT$/, "")}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
-                      {row.chain === "bsc" ? "BSC" : "이더리움"}
+                      {CHAIN_NAMES[row.chain] ?? row.chain}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {row.top10_net_pct === null
-                        ? "—"
-                        : `${(row.top10_net_pct * 100).toFixed(2)}%`}
+                      {formatShare(row.net100_pct)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {row.top10_balance_pct === null
-                        ? "—"
-                        : `${(row.top10_balance_pct * 100).toFixed(2)}%`}
+                      {formatShare(row.net100_balance_pct)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {formatShare(row.holder100_pct)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                       {row.new_wallets.toLocaleString()}
@@ -393,7 +504,7 @@ export default async function MmPage() {
         )}
         {holders.length > 0 && (
           <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-            {holders[0].date} (UTC) 하루 기준, {holders.length}종목.
+            {holders[0].date} (UTC) 하루 기준, {holders.length}행 (종목 × 체인).
           </p>
         )}
 

@@ -330,22 +330,25 @@ create table if not exists mm_watchlist (
 
 alter table mm_watchlist enable row level security;
 
--- 체인 보유자 쏠림 하루 요약 (scripts/holder-watch, TODO 39번 B). 관찰 후보·OI 급증 알림 코인의 BSC·이더리움 토큰 이체를
--- 추적 시작일부터 지갑별로 누적해서, 순매집(받은 양 − 보낸 양)이 가장 큰 지갑 10개를 매일 남긴다.
+-- 체인 보유자 쏠림 하루 요약 (scripts/holder-watch, TODO 39번 B). 관찰 후보·OI 급증 알림 코인의 토큰을 체인별로 추적해서
+-- "순매집 상위 100개 지갑"과 "잔고 상위 100개 지갑"(둘 다 컨트랙트 제외)이 총발행량의 몇 %인지 매일 남긴다.
+-- EVM 체인은 추적 시작 뒤 움직인 지갑만 보이고(이체를 앞으로만 쌓아서), 솔라나는 보유자 전체 목록을 매일 받아 비교한다.
 create table if not exists holder_daily (
   id uuid primary key default gen_random_uuid(),
   date date not null, -- UTC
   symbol text not null, -- 바이낸스 종목 ("SIRENUSDT")
-  chain text not null check (chain in ('bsc', 'eth')), -- 두 체인에 다 있는 토큰은 양쪽을 따로 기록
-  token_address text not null, -- 그 체인의 컨트랙트
+  chain text not null, -- bsc·eth·base·arbitrum·polygon·avalanche·optimism·sol. 여러 체인에 있는 토큰은 체인마다 따로
+  token_address text not null, -- 그 체인의 컨트랙트 (솔라나는 mint)
   coingecko_id text, -- 컨트랙트를 찾은 CoinGecko 코인 (잘못 찾았는지 확인용)
-  tracked_since date not null, -- 이 날부터의 이체만 누적됨 (그 전부터 들고 있던 지갑은 움직이기 전까지 안 보임)
-  wallets integer not null, -- 추적 시작 뒤 한 번이라도 움직인 지갑 수
-  active_wallets integer not null, -- 그날 움직인 지갑 수
+  tracked_since date not null, -- 이 날부터 누적됨
+  wallets integer not null, -- EVM: 추적 시작 뒤 움직인 지갑 수, 솔라나: 보유 지갑 수
+  active_wallets integer not null, -- 그날 움직인 지갑 수 (솔라나: 전날 목록과 잔고가 달라진 지갑)
   new_wallets integer not null, -- 그날 처음 본 지갑 수
-  top10_net_pct numeric, -- 순매집 상위 10개 지갑의 순매집 합 ÷ 총발행량
-  top10_balance_pct numeric, -- 그 10개 지갑의 지금 잔고 합 ÷ 총발행량
-  top10 jsonb not null, -- [{address, net, balance, contract}] — 거래소·풀 주소 손 확인용
+  net100_pct numeric, -- 순매집(추적 시작 뒤 받은 양 − 보낸 양) 상위 100개 지갑의 순매집 합 ÷ 총발행량
+  net100_balance_pct numeric, -- 그 100개 지갑의 지금 잔고 합 ÷ 총발행량
+  holder100_pct numeric, -- 잔고 상위 100개 지갑의 잔고 합 ÷ 총발행량
+  contracts_excluded integer not null default 0, -- 확인된 컨트랙트 수 (상위 계산에서 뺌)
+  top_wallets jsonb not null, -- {net: [...], holders: [...]} 각 위 10개 {address, net, balance} — 손 확인용
   missed_blocks integer not null default 0, -- VM이 멈춰서 못 받은 블록 수
   unique (date, symbol, chain)
 );

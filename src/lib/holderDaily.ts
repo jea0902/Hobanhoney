@@ -1,23 +1,25 @@
 import { getSupabase } from "@/lib/supabase";
 
-// scripts/holder-watch가 매일 남기는 BSC·이더리움 토큰 보유자 쏠림 요약 (TODO 39번 B)
+// scripts/holder-watch가 매일 남기는 체인별 토큰 보유자 쏠림 요약 (TODO 39번 B)
 export interface HolderDailyRow {
   id: string;
   date: string;
   symbol: string;
-  chain: "bsc" | "eth";
+  chain: string;
   token_address: string;
   coingecko_id: string | null;
   tracked_since: string;
   wallets: number;
   active_wallets: number;
   new_wallets: number;
-  top10_net_pct: number | null;
-  top10_balance_pct: number | null;
+  net100_pct: number | null;
+  net100_balance_pct: number | null;
+  holder100_pct: number | null;
+  contracts_excluded: number;
   missed_blocks: number;
 }
 
-// 가장 최근 날짜의 요약 (상위 10개 지갑 목록 top10은 화면에 안 써서 빼고 받는다)
+// 가장 최근 날짜의 요약 (지갑 목록 top_wallets는 화면에 안 써서 빼고 받는다)
 export async function getLatestHolderDaily() {
   const supabase = getSupabase();
   const { data: latest, error } = await supabase
@@ -30,10 +32,10 @@ export async function getLatestHolderDaily() {
   const { data, error: listError } = await supabase
     .from("holder_daily")
     .select(
-      "id, date, symbol, chain, token_address, coingecko_id, tracked_since, wallets, active_wallets, new_wallets, top10_net_pct, top10_balance_pct, missed_blocks",
+      "id, date, symbol, chain, token_address, coingecko_id, tracked_since, wallets, active_wallets, new_wallets, net100_pct, net100_balance_pct, holder100_pct, contracts_excluded, missed_blocks",
     )
     .eq("date", latest[0].date)
-    .order("top10_net_pct", { ascending: false, nullsFirst: false });
+    .order("net100_pct", { ascending: false, nullsFirst: false });
   if (listError) throw listError;
   return data as HolderDailyRow[];
 }
