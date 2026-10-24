@@ -303,4 +303,12 @@ create table if not exists oi_alerts (
 );
 
 create index if not exists oi_alerts_alerted_at_idx on oi_alerts (alerted_at);
+
+-- 2026-10-24 추가: 알림 때의 단서 (급등 후 되돌림인지 조용한 매집인지, 누가 롱/숏을 잡았나) + 들고 있었을 때 최저가
+alter table oi_alerts add column if not exists high_4h numeric; -- 알림 전 4시간 최고가
+alter table oi_alerts add column if not exists low_4h numeric; -- 알림 전 4시간 최저가
+alter table oi_alerts add column if not exists account_ratio numeric; -- 전체 계정 롱/숏 (계정 수)
+alter table oi_alerts add column if not exists top_position_ratio numeric; -- 증거금 상위 20% 롱/숏 (포지션 크기)
+alter table oi_alerts add column if not exists taker_ratio_4h numeric; -- 알림 전 4시간 테이커 매수량 ÷ 매도량
+alter table oi_alerts add column if not exists min_low_72h numeric; -- 72시간 지난 뒤 채움
 alter table oi_alerts enable row level security;
