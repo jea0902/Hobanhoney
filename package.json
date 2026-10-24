@@ -15,7 +15,8 @@
     "oi-alerts": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/oi-alerts/index.ts",
     "mm-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/index.ts",
     "mm-chart": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/chart.ts",
-    "mm-analyze": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/analyze.ts"
+    "mm-analyze": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/analyze.ts",
+    "mm-ratio-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/ratio-check.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

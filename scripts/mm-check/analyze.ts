@@ -2,8 +2,8 @@
 // 1) 시험 꼬리 — 기준일 전 60일 안에 "거래대금 폭증 + 장중 급등 + 제자리 마감"인 날이 펌핑 코인과 비교 코인에 몇 번 있었나
 // 2) 개인 뒤집힘 — 펌핑 코인의 전체 계정 롱/숏이 1 아래로 내려간 날, 그 뒤 얼마나 더 올랐나, 다시 1 위로 올라간 날 이후 어땠나
 // 실행: npm run mm-analyze -- data/mm-check/pairs-2026-10-24.csv → data/mm-check/analysis-YYYY-MM-DD.csv
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { inflateRawSync } from "node:zlib";
+import { readFileSync, writeFileSync } from "node:fs";
+import { getMetricsCsv, parseMetrics } from "./archive.ts";
 
 const DAY = 86_400_000;
 const WINDOW_DAYS = 60; // 기준일 전 볼 기간
@@ -12,7 +12,6 @@ const AFTER_DAYS = 90; // 개인 뒤집힘을 볼 기준일 뒤 기간
 const WICK_VOLUME_X = 5; // 하루 거래대금이 직전 7일 중간값의 5배 이상
 const WICK_HIGH = 0.2; // 장중 고가가 시가 대비 +20% 이상
 const WICK_CLOSE = 0.1; // 종가가 시가 대비 ±10% 이내
-const CACHE_DIR = "data/mm-check/cache";
 
 interface Day {
   time: number;
@@ -23,26 +22,6 @@ interface Day {
   oi?: number; // 그날 마지막 OI (코인 개수, 가격 변화에 안 흔들리게)
   allRatio?: number; // 전체 계정 롱/숏 하루 평균
   topRatio?: number; // 상위 트레이더 롱/숏(포지션) 하루 평균
-}
-
-// 보관소 zip에는 CSV 하나만 들어 있다 (chart.ts와 같은 방식)
-function unzipSingleFile(zip: Buffer) {
-  const compressedSize = zip.readUInt32LE(18);
-  const start = 30 + zip.readUInt16LE(26) + zip.readUInt16LE(28);
-  return inflateRawSync(zip.subarray(start, start + compressedSize)).toString("utf8");
-}
-
-// 같은 파일을 다시 받지 않게 풀어둔 CSV를 저장해 둔다 (쌍 20개 × 최대 157일이라 수천 개)
-async function getMetricsCsv(symbol: string, date: string) {
-  const cached = `${CACHE_DIR}/${symbol}-${date}.csv`;
-  if (existsSync(cached)) return readFileSync(cached, "utf8");
-  const res = await fetch(
-    `https://data.binance.vision/data/futures/um/daily/metrics/${symbol}/${symbol}-metrics-${date}.zip`,
-  );
-  const csv = res.ok ? unzipSingleFile(Buffer.from(await res.arrayBuffer())) : "";
-  // 없는 날도 빈 파일로 남겨서 다시 요청하지 않는다. 단 최근 이틀은 아직 안 올라왔을 수 있어서 남기지 않음
-  if (res.ok || Date.parse(date) < Date.now() - 3 * DAY) writeFileSync(cached, csv);
-  return csv;
 }
 
 async function getDays(symbol: string, from: number, to: number) {
@@ -64,19 +43,11 @@ async function getDays(symbol: string, from: number, to: number) {
       batch.map((d) => getMetricsCsv(symbol, new Date(d.time).toISOString().slice(0, 10))),
     );
     batch.forEach((day, j) => {
-      // 컬럼: create_time, symbol, sum_open_interest, sum_open_interest_value, count_toptrader_long_short_ratio,
-      //       sum_toptrader_long_short_ratio, count_long_short_ratio, sum_taker_long_short_vol_ratio
-      const rows = csvs[j]
-        .trim()
-        .split("\n")
-        .slice(1)
-        .map((line) => line.split(",").map(Number))
-        .filter((r) => r[2] > 0); // 보관소에 OI 0으로 찍힌 잘못된 행이 있음 (IRYS)
+      const rows = parseMetrics(csvs[j]);
       if (rows.length === 0) return;
-      const average = (col: number) => rows.reduce((sum, r) => sum + r[col], 0) / rows.length;
-      day.oi = rows[rows.length - 1][2];
-      day.topRatio = average(5);
-      day.allRatio = average(6);
+      day.oi = rows[rows.length - 1].oi;
+      day.topRatio = rows.reduce((sum, r) => sum + r.topRatio, 0) / rows.length;
+      day.allRatio = rows.reduce((sum, r) => sum + r.allRatio, 0) / rows.length;
     });
   }
   return days;
@@ -142,7 +113,6 @@ function findFlip(days: Day[], base: number) {
 async function main() {
   const file = process.argv[2];
   if (!file) throw new Error("사용법: npm run mm-analyze -- data/mm-check/pairs-2026-10-24.csv");
-  mkdirSync(CACHE_DIR, { recursive: true });
   const pairs = readFileSync(file, "utf8")
     .replace(/^﻿/, "")
     .trim()

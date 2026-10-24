@@ -4,7 +4,7 @@
 //
 // OI·롱숏 비율은 API(openInterestHist 등)가 30일까지만 줘서, 바이낸스 공식 보관소의 하루 단위 metrics 파일을 쓴다.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { inflateRawSync } from "node:zlib";
+import { getMetricsCsv, parseMetrics } from "./archive.ts";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -20,38 +20,20 @@ interface Point {
   funding?: number;
 }
 
-// 보관소 zip에는 CSV 파일 하나만 들어 있다. 압축 해제 라이브러리 없이 zip 앞부분(로컬 헤더)만 읽어서 푼다.
-function unzipSingleFile(zip: Buffer) {
-  const compressedSize = zip.readUInt32LE(18);
-  const nameLength = zip.readUInt16LE(26);
-  const extraLength = zip.readUInt16LE(28);
-  const start = 30 + nameLength + extraLength;
-  return inflateRawSync(zip.subarray(start, start + compressedSize)).toString("utf8");
-}
-
 async function getMetrics(symbol: string, from: number, to: number) {
   const points = new Map<number, Point>();
   for (let day = from; day < to; day += DAY) {
     const date = new Date(day).toISOString().slice(0, 10);
-    const url = `https://data.binance.vision/data/futures/um/daily/metrics/${symbol}/${symbol}-metrics-${date}.zip`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.log(`  ${date} metrics 없음 (${res.status})`);
-      continue;
-    }
-    const csv = unzipSingleFile(Buffer.from(await res.arrayBuffer()));
-    // 컬럼: create_time, symbol, sum_open_interest, sum_open_interest_value, count_toptrader_long_short_ratio,
-    //       sum_toptrader_long_short_ratio, count_long_short_ratio, sum_taker_long_short_vol_ratio (5분 간격)
-    for (const line of csv.trim().split("\n").slice(1)) {
-      const cols = line.split(",");
-      const time = Date.parse(cols[0].replace(" ", "T") + "Z");
-      if (time % HOUR !== 0) continue; // 정시 값만 써서 1시간 단위로 맞춘다
-      points.set(time, {
-        time,
-        oiUsd: Number(cols[3]),
-        topPositionRatio: Number(cols[5]),
-        allAccountRatio: Number(cols[6]),
-        takerRatio: Number(cols[7]),
+    const rows = parseMetrics(await getMetricsCsv(symbol, date));
+    if (rows.length === 0) console.log(`  ${date} metrics 없음`);
+    for (const row of rows) {
+      if (row.time % HOUR !== 0) continue; // 정시 값만 써서 1시간 단위로 맞춘다
+      points.set(row.time, {
+        time: row.time,
+        oiUsd: row.oiUsd,
+        topPositionRatio: row.topRatio,
+        allAccountRatio: row.allRatio,
+        takerRatio: row.takerRatio,
       });
     }
   }
