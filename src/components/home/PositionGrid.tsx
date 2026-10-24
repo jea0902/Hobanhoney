@@ -45,7 +45,10 @@ function getActualStats(row: PositionRow, markPrice: number | null, usdtKrwRate:
     return { returnRate: null, pnl: null, pnlKrw: null };
   }
   const pnl = getUnrealizedPnl(row.direction, row.quantity!, row.entry_price!, markPrice);
-  const returnRate = getReturnRatePercent(pnl, row.quantity!, row.entry_price!, row.leverage!);
+  const returnRate =
+    row.margin !== undefined && row.margin > 0
+      ? (pnl / row.margin) * 100
+      : getReturnRatePercent(pnl, row.quantity!, row.entry_price!, row.leverage!);
   const pnlKrw = usdtKrwRate !== null ? pnl * usdtKrwRate : null;
   return { returnRate, pnl, pnlKrw };
 }
@@ -80,7 +83,7 @@ export default async function PositionGrid() {
 
   const traders = getTraderGroups(positions);
 
-  // 운영자 최무상은 유튜버와 같은 트레이더 한 명으로 맨 아래에 붙이고, 컨센서스에도 1표로 센다.
+  // 운영자는 유튜버와 같은 트레이더 한 명으로 맨 아래에 붙이고, 컨센서스에도 1표로 센다.
   const [youtubers, walletTraders, founder, usdtKrwRate] = await Promise.all([
     withRepresentativePosition(traders),
     getWalletTraders(),

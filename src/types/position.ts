@@ -14,6 +14,8 @@ export interface PositionRow {
   quantity: number | null;
   entry_price: number | null;
   liquidation_price: number | null;
+  // 운영자 행만: Bybit 실제 증거금(추가 증거금 포함). DB에는 없는 칸이라 없으면 수량 × 진입가 ÷ 레버리지로 계산한다.
+  margin?: number;
 
   // 예측 발언 전용 (type === "statement")
   quote: string | null;
