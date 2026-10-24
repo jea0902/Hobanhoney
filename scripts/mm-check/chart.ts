@@ -101,7 +101,10 @@ function panel(
 ) {
   const width = 1400;
   const height = 150;
-  const values = points.map(pick);
+  // 보관소 파일에 OI가 0으로 찍힌 시점이 있다(IRYS). 로그 눈금에서 0은 그릴 수 없어서 빈칸으로 둔다.
+  const values = points
+    .map(pick)
+    .map((v) => (options.log && v !== undefined && v <= 0 ? undefined : v));
   const shown = values.filter((v): v is number => v !== undefined && Number.isFinite(v));
   if (shown.length === 0) return `<h3>${title}: 데이터 없음</h3>`;
   const scale = (v: number) => (options.log ? Math.log10(v) : v);
