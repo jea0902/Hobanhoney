@@ -1,12 +1,13 @@
-// Arkham 손 검증용 목록 (TODO 39번): 최근 6개월 안 "7일 안 종가 2배" 펌핑 코인 20개와,
+// 펌핑 신호 검증용 목록 (TODO 39번): 최근 6개월 안 "7일 안 종가 2배" 펌핑 코인 20개와,
 // 같은 시기(±30일)에 바이낸스 선물에 상장했고 비슷한 거래대금인데 한 번도 2배가 안 된 비교 코인을 짝지어 CSV로 쓴다.
 // 실행: node scripts/mm-check/index.ts  → data/mm-check/pairs-YYYY-MM-DD.csv (엑셀에서 열어 Arkham 확인 결과를 채움)
 import fs from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const DAY = 86_400_000;
-const LOOKBACK_DAYS = 180; // 펌핑 시작일을 찾는 기간
+const LOOKBACK_DAYS = 210; // 펌핑 시작일을 찾는 기간 (180일이면 LAB의 상승 시작 2026-04-05가 빠져서 늘림)
 const SKIP_AFTER_LISTING_DAYS = 14; // 상장 직후의 가격 형성은 펌핑으로 보지 않음
+const RUN_GAP_DAYS = 30; // 이 기간 안에 펌핑이 또 있으면 같은 상승 구간으로 봄
 const PAIRS = 20;
 const MUST_INCLUDE = ["SIREN", "LAB", "AKE", "IRYS"]; // 사용자가 MM 펌핑으로 본 코인
 // 비교 대상이 될 수 없는 종목 (스테이블코인, 금 연동 토큰)
@@ -94,9 +95,14 @@ const from = Date.now() - LOOKBACK_DAYS * DAY;
 const neverPumped = coins.filter(
   (c) => !NOT_COMPARABLE.includes(c.base) && findPumps(c).length === 0,
 );
-// 코인마다 기간 안에서 가장 큰 펌핑 하나 (7일 뒤 결과가 있는 것만)
+// 코인마다 기간 안의 "상승 시작" 중 가장 크게 오른 하나 (7일 뒤 결과가 있는 것만). 상승 시작 = 직전 30일 안에 다른 펌핑이 없던 펌핑.
+// 상승 시작만 보는 이유: 모든 펌핑 중 가장 큰 것을 고르면 상승 구간 끝의 폭락 뒤 반등이 뽑힘(2026-10-24 LAB: 7/3 -46% 뒤 반등).
 const pumped = coins.flatMap((coin) => {
-  const inRange = findPumps(coin).filter((p) => p.start >= from && p.start <= Date.now() - 8 * DAY);
+  const pumps = findPumps(coin);
+  const starts = pumps.filter(
+    (p, i) => i === 0 || p.start - pumps[i - 1].start > RUN_GAP_DAYS * DAY,
+  );
+  const inRange = starts.filter((p) => p.start >= from && p.start <= Date.now() - 8 * DAY);
   if (inRange.length === 0) return [];
   return [{ coin, pump: inRange.reduce((a, b) => (b.gain > a.gain ? b : a)) }];
 });
