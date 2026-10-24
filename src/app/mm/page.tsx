@@ -316,14 +316,15 @@ export default async function MmPage() {
         )}
 
         <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
-          체인 보유자 쏠림 (BSC)
+          체인 보유자 쏠림
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-          관찰 후보와 OI 급증 알림 코인 중 BSC 토큰의 이체를 15분마다 받아 지갑별로 누적함. 순매집 =
-          추적 시작 뒤 받은 양 − 보낸 양. 상위 10개 지갑의 순매집과 지금 잔고를 총발행량 대비로
-          표시함. 과거 이체 기록은 무료로 받을 수 없어서 추적 시작일 이후만 보이고, 그 전부터 들고
-          있던 지갑은 움직이기 전까지 안 보임. 거래소·DEX 풀 주소가 섞여 있을 수 있음 (손으로 확인해
-          제외 중).
+          관찰 후보와 OI 급증 알림 코인 중 BSC·이더리움 토큰의 이체를 15분마다 받아 지갑별로 누적함.
+          두 체인에 다 있는 토큰은 실제 거래가 어느 쪽인지 몰라서 양쪽을 따로 표시함. 순매집 = 추적
+          시작 뒤 받은 양 − 보낸 양. 상위 10개 지갑의 순매집과 지금 잔고를 총발행량 대비로 표시함.
+          과거 이체 기록은 무료로 받을 수 없어서 추적 시작일 이후만 보이고, 그 전부터 들고 있던
+          지갑은 움직이기 전까지 안 보임. 거래소·DEX 풀 주소가 섞여 있을 수 있음 (손으로 확인해 제외
+          중).
         </p>
         {holders.length === 0 ? (
           <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
@@ -335,6 +336,7 @@ export default async function MmPage() {
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
                   <th className="px-4 py-2.5 text-left font-medium">종목</th>
+                  <th className="px-2 py-2.5 text-left font-medium sm:px-3">체인</th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     상위 10 순매집
                   </th>
@@ -360,6 +362,9 @@ export default async function MmPage() {
                   >
                     <td className="whitespace-nowrap px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-4">
                       {row.symbol.replace(/USDT$/, "")}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.chain === "bsc" ? "BSC" : "이더리움"}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                       {row.top10_net_pct === null

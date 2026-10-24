@@ -1,10 +1,11 @@
 import { getSupabase } from "@/lib/supabase";
 
-// scripts/holder-watch가 매일 남기는 BSC 토큰 보유자 쏠림 요약 (TODO 39번 B)
+// scripts/holder-watch가 매일 남기는 BSC·이더리움 토큰 보유자 쏠림 요약 (TODO 39번 B)
 export interface HolderDailyRow {
   id: string;
   date: string;
   symbol: string;
+  chain: "bsc" | "eth";
   token_address: string;
   coingecko_id: string | null;
   tracked_since: string;
@@ -29,7 +30,7 @@ export async function getLatestHolderDaily() {
   const { data, error: listError } = await supabase
     .from("holder_daily")
     .select(
-      "id, date, symbol, token_address, coingecko_id, tracked_since, wallets, active_wallets, new_wallets, top10_net_pct, top10_balance_pct, missed_blocks",
+      "id, date, symbol, chain, token_address, coingecko_id, tracked_since, wallets, active_wallets, new_wallets, top10_net_pct, top10_balance_pct, missed_blocks",
     )
     .eq("date", latest[0].date)
     .order("top10_net_pct", { ascending: false });
