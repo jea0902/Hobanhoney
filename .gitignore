@@ -35,3 +35,4 @@ next-env.d.ts
 
 # AI 워뇨띠 분석용 원본 거래·입출금 기록 (다른 사람의 실제 거래 내역이라 저장소에 올리지 않음)
 /data/wonyotti/
+/data/backup/

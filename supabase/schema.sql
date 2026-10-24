@@ -283,3 +283,24 @@ create table if not exists wallet_sync (
 );
 
 alter table wallet_sync enable row level security;
+
+-- 바이낸스 선물 OI 급증 알림 (scripts/oi-alerts). 알림(alert)마다 같은 시각 무작위 비교 종목(control)을 같이 기록해서,
+-- 72시간 뒤 결과를 비교해 "OI 급증이 펌핑을 앞서는지" 검증한다.
+create table if not exists oi_alerts (
+  id uuid primary key default gen_random_uuid(),
+  symbol text not null, -- 바이낸스 종목 ("IRYSUSDT")
+  kind text not null check (kind in ('alert', 'control')),
+  alerted_at timestamptz not null, -- OI 기록 시각 (정시)
+  oi_usd numeric not null,
+  oi_change_4h numeric not null, -- 비율 (0.3 = +30%)
+  price numeric not null,
+  price_change_4h numeric not null, -- 비율
+  funding_rate numeric, -- 기록할 때의 직전 펀딩비
+  price_24h numeric, -- 아래 셋은 72시간 지난 뒤 채움
+  price_72h numeric,
+  max_high_72h numeric,
+  unique (symbol, alerted_at, kind)
+);
+
+create index if not exists oi_alerts_alerted_at_idx on oi_alerts (alerted_at);
+alter table oi_alerts enable row level security;

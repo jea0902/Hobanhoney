@@ -68,7 +68,17 @@ export async function planActions(
 
   for (const position of reading.positions) {
     const key = positionKey(position.symbol, position.direction);
-    const row = openRows.find((r) => positionKey(r.symbol ?? "", r.direction) === key);
+    const row =
+      openRows.find((r) => positionKey(r.symbol ?? "", r.direction) === key) ??
+      // 같은 포지션의 종목 이름을 화면마다 다르게 읽을 때가 있다 (2026-10-15 박호두 KORUUSDT ↔ KORUSDT 번갈아,
+      // 이름이 바뀔 때마다 "종료 + 신규"가 9번 기록됨). 방향·수량·진입가까지 같으면 같은 포지션으로 본다.
+      openRows.find(
+        (r) =>
+          !matchedRowIds.has(r.id) &&
+          r.direction === position.direction &&
+          isClose(position.size, r.quantity ?? 0, 1e-6) &&
+          isClose(position.entryPrice, r.entry_price ?? 0, 1e-4),
+      );
     if (!row) {
       actions.push({ kind: "open", position });
       continue;
