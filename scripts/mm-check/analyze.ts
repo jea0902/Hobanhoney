@@ -3,7 +3,7 @@
 // 2) 개인 뒤집힘 — 펌핑 코인의 전체 계정 롱/숏이 1 아래로 내려간 날, 그 뒤 얼마나 더 올랐나, 다시 1 위로 올라간 날 이후 어땠나
 // 실행: npm run mm-analyze -- data/mm-check/pairs-2026-10-24.csv → data/mm-check/analysis-YYYY-MM-DD.csv
 import { readFileSync, writeFileSync } from "node:fs";
-import { getMetricsCsv, parseMetrics } from "./archive.ts";
+import { getDailySummaries } from "./archive.ts";
 
 const DAY = 86_400_000;
 const WINDOW_DAYS = 60; // 기준일 전 볼 기간
@@ -36,19 +36,14 @@ async function getDays(symbol: string, from: number, to: number) {
     volume: Number(c[7]),
   }));
 
-  // 하루 파일 10개씩 동시에 받는다
-  for (let i = 0; i < days.length; i += 10) {
-    const batch = days.slice(i, i + 10);
-    const csvs = await Promise.all(
-      batch.map((d) => getMetricsCsv(symbol, new Date(d.time).toISOString().slice(0, 10))),
-    );
-    batch.forEach((day, j) => {
-      const rows = parseMetrics(csvs[j]);
-      if (rows.length === 0) return;
-      day.oi = rows[rows.length - 1].oi;
-      day.topRatio = rows.reduce((sum, r) => sum + r.topRatio, 0) / rows.length;
-      day.allRatio = rows.reduce((sum, r) => sum + r.allRatio, 0) / rows.length;
-    });
+  const dateOf = (d: Day) => new Date(d.time).toISOString().slice(0, 10);
+  const summaries = await getDailySummaries(symbol, days.map(dateOf));
+  for (const day of days) {
+    const summary = summaries[dateOf(day)];
+    if (!summary) continue;
+    day.oi = summary.oi;
+    day.topRatio = summary.topRatio;
+    day.allRatio = summary.allRatio;
   }
   return days;
 }

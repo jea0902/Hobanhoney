@@ -37,4 +37,5 @@ next-env.d.ts
 /data/wonyotti/
 /data/backup/
 /data/mm-check/charts/
-/data/mm-check/cache/
+/data/mm-check/daily/
+/data/mm-check/universe-days.json

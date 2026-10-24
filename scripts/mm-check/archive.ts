@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 
 const DAY = 86_400_000;
-const CACHE_DIR = "data/mm-check/cache";
+const SUMMARY_DIR = "data/mm-check/daily";
 
 // zip에는 CSV 하나만 들어 있다. 압축 해제 라이브러리 없이 zip 앞부분(로컬 헤더)만 읽어서 푼다.
 function unzipSingleFile(zip: Buffer) {
@@ -14,18 +14,12 @@ function unzipSingleFile(zip: Buffer) {
   return inflateRawSync(zip.subarray(start, start + compressedSize)).toString("utf8");
 }
 
-// 하루치 CSV 내용 (없는 날은 빈 문자열). 같은 파일을 다시 받지 않게 풀어둔 CSV를 저장해 둔다.
+// 하루치 CSV 내용 (없는 날은 빈 문자열). 원본은 저장하지 않는다 — 40개 코인 1년치가 532MB라서.
 export async function getMetricsCsv(symbol: string, date: string) {
-  mkdirSync(CACHE_DIR, { recursive: true });
-  const cached = `${CACHE_DIR}/${symbol}-${date}.csv`;
-  if (existsSync(cached)) return readFileSync(cached, "utf8");
   const res = await fetch(
     `https://data.binance.vision/data/futures/um/daily/metrics/${symbol}/${symbol}-metrics-${date}.zip`,
   );
-  const csv = res.ok ? unzipSingleFile(Buffer.from(await res.arrayBuffer())) : "";
-  // 없는 날도 빈 파일로 남겨서 다시 요청하지 않는다. 단 최근 사흘은 아직 안 올라왔을 수 있어서 남기지 않음
-  if (res.ok || Date.parse(date) < Date.now() - 3 * DAY) writeFileSync(cached, csv);
-  return csv;
+  return res.ok ? unzipSingleFile(Buffer.from(await res.arrayBuffer())) : "";
 }
 
 // CSV를 숫자 행으로. OI가 0으로 찍힌 잘못된 행(IRYS 보관소)은 뺀다.
@@ -46,4 +40,49 @@ export function parseMetrics(csv: string) {
       };
     })
     .filter((r) => r.oi > 0);
+}
+
+export interface DailySummary {
+  oi: number; // 그날 마지막 OI (코인 개수)
+  oiUsd: number; // 그날 마지막 OI (USD)
+  allRatio: number; // 전체 계정 롱/숏 하루 평균
+  topRatio: number; // 상위 트레이더 롱/숏(포지션) 하루 평균
+  takerRatio: number; // 테이커 매수/매도 하루 평균
+}
+
+function summarize(csv: string): DailySummary | null {
+  const rows = parseMetrics(csv);
+  if (rows.length === 0) return null;
+  const average = (pick: (r: (typeof rows)[number]) => number) =>
+    rows.reduce((sum, r) => sum + pick(r), 0) / rows.length;
+  const last = rows[rows.length - 1];
+  return {
+    oi: last.oi,
+    oiUsd: last.oiUsd,
+    allRatio: average((r) => r.allRatio),
+    topRatio: average((r) => r.topRatio),
+    takerRatio: average((r) => r.takerRatio),
+  };
+}
+
+// 날짜별 하루 요약값. 종목마다 JSON 하나에 저장해 두고 없는 날짜만 받는다 (null = 그날 파일 없음).
+export async function getDailySummaries(symbol: string, dates: string[]) {
+  mkdirSync(SUMMARY_DIR, { recursive: true });
+  const file = `${SUMMARY_DIR}/${symbol}.json`;
+  const saved: Record<string, DailySummary | null> = existsSync(file)
+    ? JSON.parse(readFileSync(file, "utf8"))
+    : {};
+  const missing = dates.filter((date) => !(date in saved));
+  // 10개씩 동시에 받는다
+  for (let i = 0; i < missing.length; i += 10) {
+    const batch = missing.slice(i, i + 10);
+    const csvs = await Promise.all(batch.map((date) => getMetricsCsv(symbol, date)));
+    batch.forEach((date, j) => {
+      const summary = summarize(csvs[j]);
+      // 최근 사흘은 아직 안 올라왔을 수 있어서 "없음"으로 저장하지 않는다
+      if (summary || Date.parse(date) < Date.now() - 3 * DAY) saved[date] = summary;
+    });
+  }
+  if (missing.length > 0) writeFileSync(file, JSON.stringify(saved));
+  return saved;
 }

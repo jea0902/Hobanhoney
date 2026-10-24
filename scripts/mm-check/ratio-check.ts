@@ -2,7 +2,7 @@
 // 20쌍 계산에서 17/20쌍 펌핑 코인이 더 높았는데, (1) 그 코인이 원래 늘 높은 건지 (2) 떨어지던 코인이라 롱이 많았을 뿐인지 가린다.
 // 실행: npm run mm-ratio-check -- data/mm-check/pairs-2026-10-24.csv
 import { readFileSync } from "node:fs";
-import { getMetricsCsv, parseMetrics } from "./archive.ts";
+import { getDailySummaries } from "./archive.ts";
 
 const DAY = 86_400_000;
 const HISTORY_DAYS = 400; // 코인마다 볼 기간 (보관소 파일 하루 1개씩)
@@ -25,17 +25,9 @@ async function getDays(base: string) {
     time: Number(c[0]),
     close: Number(c[4]),
   }));
-  // 하루 파일 10개씩 동시에 받는다 (처음엔 코인당 1~2분, 다음부터는 저장해 둔 파일을 씀)
-  for (let i = 0; i < days.length; i += 10) {
-    const batch = days.slice(i, i + 10);
-    const csvs = await Promise.all(
-      batch.map((d) => getMetricsCsv(symbol, new Date(d.time).toISOString().slice(0, 10))),
-    );
-    batch.forEach((day, j) => {
-      const rows = parseMetrics(csvs[j]);
-      if (rows.length > 0) day.allRatio = rows.reduce((s, r) => s + r.allRatio, 0) / rows.length;
-    });
-  }
+  const dateOf = (d: Day) => new Date(d.time).toISOString().slice(0, 10);
+  const summaries = await getDailySummaries(symbol, days.map(dateOf));
+  for (const day of days) day.allRatio = summaries[dateOf(day)]?.allRatio;
   return days;
 }
 
