@@ -6,9 +6,9 @@ import type { PositionRow } from "@/types/position";
 
 // 운영자 본인을 홈 실시간 포지션에 유튜버와 같은 트레이더 한 명으로 보여준다.
 // 데이터는 positions 테이블이 아니라 Bybit 실계좌(읽기 전용 API)와 closed_trades에서 온다.
-export const FOUNDER_TRADER_NAME = "최무상";
+export const FOUNDER_TRADER_NAME = "다크페페";
 export const FOUNDER_IMAGE =
-  "https://tahdftbcqkxqkmclwytu.supabase.co/storage/v1/object/public/trader-images/choimoosang_logo.png";
+  "https://tahdftbcqkxqkmclwytu.supabase.co/storage/v1/object/public/trader-images/darkpepe.png";
 
 // 기존 트레이더 카드·표가 쓰는 PositionRow 형태로 바꾼다.
 function toPositionRow(position: OwnerPosition): PositionRow {
@@ -22,6 +22,8 @@ function toPositionRow(position: OwnerPosition): PositionRow {
     quantity: position.quantity,
     entry_price: position.entryPrice,
     liquidation_price: position.liquidationPrice,
+    // 증거금을 추가하면 레버리지로 다시 계산한 증거금보다 커져서, 운영자 페이지(Bybit 기준)와 수익률이 달라진다.
+    margin: position.margin,
     quote: null,
     direction: position.direction,
     result: null,
@@ -52,7 +54,7 @@ export async function getFounderTrader() {
   return { trader, markPrice: top?.currentPrice ?? null, positions: positions ?? [] };
 }
 
-// 홈 표에서 누르면 갈 곳. 최무상은 운영자 페이지(/founder), 나머지는 트레이더 기록 페이지.
+// 홈 표에서 누르면 갈 곳. 운영자는 운영자 페이지(/founder), 나머지는 트레이더 기록 페이지.
 export function traderHref(traderName: string) {
   return traderName === FOUNDER_TRADER_NAME
     ? "/founder"

@@ -83,6 +83,8 @@ export interface OwnerPosition {
   leverage: number;
   liquidationPrice: number | null;
   positionValue: number;
+  // 포지션 증거금 (나중에 추가한 증거금 포함). 수량 × 진입가 ÷ 레버리지와 다를 수 있다.
+  margin: number;
   unrealizedPnl: number;
   returnOnEquityPercent: number;
   openedAt: string;
@@ -170,6 +172,7 @@ export async function getOwnerPositions(): Promise<OwnerPosition[] | null> {
         leverage: Number(position.leverage),
         liquidationPrice: position.liqPrice ? Number(position.liqPrice) : null,
         positionValue: Number(position.positionValue),
+        margin: positionIM,
         unrealizedPnl,
         returnOnEquityPercent: positionIM > 0 ? (unrealizedPnl / positionIM) * 100 : 0,
         openedAt: new Date(position.openTime).toISOString(),
