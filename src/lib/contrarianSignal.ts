@@ -58,7 +58,7 @@ function getRsi(closes: number[], period = 14): number | null {
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
-// 홈 포지션 표의 인간지표 컨센서스와 같은 기준(트레이더별 대표 포지션 1인 1표, 제프리황·최무상 포함)으로 센다.
+// 홈 포지션 표의 인간지표 컨센서스와 같은 기준(트레이더별 대표 포지션 1인 1표, 제프리황·운영자 포함)으로 센다.
 async function getYoutuberCounts() {
   const { data } = await getSupabase().from("positions").select("*");
   const [youtubers, walletTraders, founder] = await Promise.all([
