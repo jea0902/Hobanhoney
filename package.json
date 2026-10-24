@@ -19,7 +19,8 @@
     "mm-ratio-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/ratio-check.ts",
     "mm-universe": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/universe.ts",
     "mm-universe-report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/universe-report.ts",
-    "mm-watchlist": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-watchlist/index.ts"
+    "mm-watchlist": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-watchlist/index.ts",
+    "holder-watch": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/holder-watch/index.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

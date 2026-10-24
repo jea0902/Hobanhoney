@@ -3,6 +3,7 @@ import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getOiAlerts, summarize } from "@/lib/oiAlerts";
 import { getLatestWatchlist, getWatchlistHitRate } from "@/lib/mmWatchlist";
+import { getLatestHolderDaily } from "@/lib/holderDaily";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function MmPage() {
   const now = Date.now();
   const watchlist = await getLatestWatchlist();
   const watchlistHit = await getWatchlistHitRate();
+  const holders = await getLatestHolderDaily();
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -310,6 +312,83 @@ export default async function MmPage() {
             {watchlistHit.done === 0
               ? "기록 38일 뒤부터 집계함."
               : `${watchlistHit.done}건 중 ${watchlistHit.pumped}건이 30일 안 펌핑 시작 (${((watchlistHit.pumped / watchlistHit.done) * 100).toFixed(1)}%). 같은 종목이 매일 다시 기록되므로 건수는 날짜 기준임.`}
+          </p>
+        )}
+
+        <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
+          체인 보유자 쏠림 (BSC)
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+          관찰 후보와 OI 급증 알림 코인 중 BSC 토큰의 이체를 15분마다 받아 지갑별로 누적함. 순매집 =
+          추적 시작 뒤 받은 양 − 보낸 양. 상위 10개 지갑의 순매집과 지금 잔고를 총발행량 대비로
+          표시함. 과거 이체 기록은 무료로 받을 수 없어서 추적 시작일 이후만 보이고, 그 전부터 들고
+          있던 지갑은 움직이기 전까지 안 보임. 거래소·DEX 풀 주소가 섞여 있을 수 있음 (손으로 확인해
+          제외 중).
+        </p>
+        {holders.length === 0 ? (
+          <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+            2026-10-25 추적 시작. 첫 하루 요약은 다음 날 새벽(UTC)에 기록됨.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
+                  <th className="px-4 py-2.5 text-left font-medium">종목</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    상위 10 순매집
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    상위 10 잔고
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    새 지갑
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    움직인 지갑
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    추적 시작
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {holders.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                  >
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-4">
+                      {row.symbol.replace(/USDT$/, "")}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.top10_net_pct === null
+                        ? "—"
+                        : `${(row.top10_net_pct * 100).toFixed(2)}%`}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.top10_balance_pct === null
+                        ? "—"
+                        : `${(row.top10_balance_pct * 100).toFixed(2)}%`}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.new_wallets.toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.active_wallets.toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.tracked_since}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {holders.length > 0 && (
+          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+            {holders[0].date} (UTC) 하루 기준, {holders.length}종목.
           </p>
         )}
 
