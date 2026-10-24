@@ -112,8 +112,16 @@ export default async function MmPage() {
           최근 OI 급증 알림
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-          조건: 4시간 동안 OI(달러 기준) +30% 이상, 같은 4시간 가격 변화 ±5% 이내, OI 100만 달러
-          이상. 가격은 그대로인데 포지션만 쌓이는 상태. 같은 종목은 24시간에 한 번만 기록함.
+          조건: 4시간 동안 OI(달러 기준) +30% 이상, 4시간 전 대비 지금 가격 변화 ±5% 이내, OI 100만
+          달러 이상. 같은 종목은 24시간에 한 번만 기록함. 가격 변화는 시작과 끝만 비교해서, 그 사이
+          급등했다가 되돌아온 경우도 포함됨 (첫 알림 3건 모두 이 경우) → 4시간 안 최고·최저가를 같이
+          기록해 조용히 쌓인 경우와 나눠 볼 예정.
+        </p>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+          OI는 롱과 숏이 항상 같은 양이라 방향을 알 수 없어서 단서를 같이 기록함. 개인 롱/숏 = 롱
+          계정 수 ÷ 숏 계정 수, 큰손 롱/숏 = 증거금 상위 20%의 롱 포지션 ÷ 숏 포지션, 테이커 = 직전
+          4시간 시장가 매수량 ÷ 매도량 (1보다 크면 사는 쪽이 먼저 들어옴). 2026-10-24 이후 기록부터
+          있음.
         </p>
         {alerts.length === 0 ? (
           <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
@@ -121,7 +129,7 @@ export default async function MmPage() {
           </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+            <table className="w-full min-w-[1180px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
                   <th className="px-4 py-2.5 text-left font-medium">시각</th>
@@ -136,7 +144,19 @@ export default async function MmPage() {
                     가격 4시간
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    4시간 안 최고·최저
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     펀딩비
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    개인 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    큰손 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    테이커
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     알림 가격
@@ -144,11 +164,15 @@ export default async function MmPage() {
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     72시간 안 최고
                   </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    72시간 안 최저
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {alerts.map((row) => {
                   const up = row.max_high_72h === null ? null : row.max_high_72h / row.price - 1;
+                  const down = row.min_low_72h === null ? null : row.min_low_72h / row.price - 1;
                   const hoursLeft = Math.ceil(
                     (new Date(row.alerted_at).getTime() + 73 * HOUR - now) / HOUR,
                   );
@@ -177,8 +201,23 @@ export default async function MmPage() {
                         {formatPercent(row.price_change_4h)}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                        {row.high_4h === null || row.low_4h === null
+                          ? "—"
+                          : `${formatPercent(row.high_4h / row.price - 1, 0)} / ${formatPercent(row.low_4h / row.price - 1, 0)}`}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                         {row.funding_rate === null ? "—" : formatPercent(row.funding_rate, 4)}
                       </td>
+                      {[row.account_ratio, row.top_position_ratio, row.taker_ratio_4h].map(
+                        (ratio, i) => (
+                          <td
+                            key={i}
+                            className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3"
+                          >
+                            {ratio === null ? "—" : ratio.toFixed(2)}
+                          </td>
+                        ),
+                      )}
                       <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                         {Number(row.price.toPrecision(5))}
                       </td>
@@ -188,6 +227,11 @@ export default async function MmPage() {
                         {up === null
                           ? `집계 중 (${Math.max(hoursLeft, 1)}시간 뒤)`
                           : formatPercent(up)}
+                      </td>
+                      <td
+                        className={`whitespace-nowrap px-2 py-2.5 text-right sm:px-3 ${down === null ? "text-gray-400" : upDownColor(down)}`}
+                      >
+                        {down === null ? "—" : formatPercent(down)}
                       </td>
                     </tr>
                   );
