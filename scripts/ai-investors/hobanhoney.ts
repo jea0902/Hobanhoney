@@ -31,6 +31,8 @@ interface Followed {
   openedAt: number;
   closedAt: number | null;
   exitPrice: number | null;
+  // 이 시각 전의 1분봉까지만 강제청산을 판정한다 (열린 포지션은 null)
+  liquidationCheckUntil: number | null;
   candles: Candle[];
 }
 
@@ -82,6 +84,11 @@ async function loadFollowed(now: number) {
       );
       continue;
     }
+    // 에이전트는 종료를 몇 분~수십 분 늦게 기록한다. 박호두는 종료가격에서 닫았으니 그 가격에 마지막으로 닿은 1분봉 뒤로는
+    // 이미 닫힌 포지션이다 (2026-10-24 IRYS: 04:08쯤 0.145에 닫았는데 04:24에 기록 → 그 사이 급등으로 AI만 강제청산됨).
+    const lastAtExit = isOpen
+      ? undefined
+      : candles.findLast((c) => c.time < closedAt! && c.low <= exitPrice && exitPrice <= c.high);
     followed.push({
       symbol: row.symbol,
       direction: row.direction === "Long" ? "Short" : "Long",
@@ -90,6 +97,8 @@ async function loadFollowed(now: number) {
       openedAt,
       closedAt,
       exitPrice: isOpen ? null : exitPrice,
+      // 종료가격에 닿은 봉을 못 찾으면(종료가격을 잘못 읽은 경우 등) 기록된 종료 시각까지 본다.
+      liquidationCheckUntil: isOpen ? null : lastAtExit ? lastAtExit.time + 60_000 : closedAt,
       candles,
     });
   }
@@ -210,11 +219,11 @@ export async function runHobanhoney(market: Market) {
         `박호두 ${f.direction === "Long" ? "숏" : "롱"} 반대 진입 (증거금 $${margin.toFixed(2)}, 시드의 10%)`,
       );
 
-      // 진입 다음 분부터 종료 전까지 1분봉 고가·저가가 강제청산가에 닿았는지 본다.
+      // 진입 다음 분부터 박호두가 실제로 닫았을 시각까지 1분봉 고가·저가가 강제청산가에 닿았는지 본다.
       const hit = f.candles.find(
         (c) =>
           c.time > event.time &&
-          (f.closedAt === null || c.time < f.closedAt) &&
+          (f.liquidationCheckUntil === null || c.time < f.liquidationCheckUntil) &&
           (f.direction === "Long"
             ? c.low <= position.liquidationPrice
             : c.high >= position.liquidationPrice),
