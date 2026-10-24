@@ -278,7 +278,13 @@ async function addTokens(state: State) {
   }
 }
 
-type Log = { address: string; topics: string[]; data: string; blockTimestamp: string };
+type Log = {
+  address: string;
+  topics: string[];
+  data: string;
+  blockNumber: string;
+  blockTimestamp?: string;
+};
 
 // 범위가 너무 크거나 결과가 너무 많아서 노드가 거절하면 반으로 나눠 다시 받는다
 async function getLogs(url: string, addresses: string[], from: number, to: number): Promise<Log[]> {
@@ -329,12 +335,20 @@ async function collect(state: State, chain: EvmChain) {
     for (let i = 0; i < addresses.length; i += MAX_ADDRESSES) {
       logs.push(...(await getLogs(url, addresses.slice(i, i + MAX_ADDRESSES), start, end)));
     }
+    // Avalanche 노드는 이체 기록에 블록 시각을 안 붙여줘서 그 블록만 따로 조회한다
+    const missing = [...new Set(logs.filter((l) => !l.blockTimestamp).map((l) => l.blockNumber))];
+    const blocks = (await rpcBatch(
+      url,
+      missing.map((n) => ({ method: "eth_getBlockByNumber", params: [n, false] })),
+    )) as { timestamp: string }[];
+    const blockTimes = new Map(missing.map((n, i) => [n, blocks[i].timestamp]));
     for (const log of logs) {
       const symbol = bySymbol.get(log.address.toLowerCase());
       if (!symbol || log.topics.length !== 3) continue; // ERC-721 등 모양이 다른 Transfer 제외
       const { decimals } = state.tokens[symbol].chains[chain]!;
       const amount = Number(BigInt(log.data === "0x" ? 0 : log.data)) / 10 ** decimals;
-      const date = toDate(parseInt(log.blockTimestamp, 16) * 1000);
+      const timestamp = log.blockTimestamp ?? blockTimes.get(log.blockNumber)!;
+      const date = toDate(parseInt(timestamp, 16) * 1000);
       const day = ((state.daily[date] ??= {})[`${symbol}:${chain}`] ??= { active: 0, fresh: 0 });
       const book = wallets.get(symbol)!;
       for (const [index, topic] of [log.topics[1], log.topics[2]].entries()) {
