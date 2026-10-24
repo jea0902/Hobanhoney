@@ -33,7 +33,7 @@ export async function getLatestHolderDaily() {
       "id, date, symbol, chain, token_address, coingecko_id, tracked_since, wallets, active_wallets, new_wallets, top10_net_pct, top10_balance_pct, missed_blocks",
     )
     .eq("date", latest[0].date)
-    .order("top10_net_pct", { ascending: false });
+    .order("top10_net_pct", { ascending: false, nullsFirst: false });
   if (listError) throw listError;
   return data as HolderDailyRow[];
 }
