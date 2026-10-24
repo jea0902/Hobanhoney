@@ -45,13 +45,47 @@ async function getSnapshot(symbol: string): Promise<Snapshot | null> {
   return { symbol, at: rows[4].timestamp, oiUsd: now, oiChange: now / before - 1 };
 }
 
-// at 시각의 가격과 4시간 전 대비 변화. 1시간봉 종가 = 다음 정시의 가격.
-async function getPriceChange(symbol: string, at: number) {
+interface PriceMove {
+  price: number;
+  priceChange: number;
+  high4h: number;
+  low4h: number;
+}
+
+// at 시각의 가격, 4시간 전 대비 변화, 그 4시간 안 최고·최저가. 1시간봉 종가 = 다음 정시의 가격.
+// 4시간 전·지금만 비교하면 그 사이 +39% 찍고 돌아온 급등(2026-10-24 KAT·TREE)도 "가격 그대로"가 되어서 범위를 같이 남긴다.
+async function getPriceMove(symbol: string, at: number): Promise<PriceMove> {
   const candles = (await binance(
     `/fapi/v1/klines?symbol=${symbol}&interval=1h&startTime=${at - 5 * HOUR}&limit=5`,
   )) as string[][];
   const price = Number(candles[4][4]);
-  return { price, priceChange: price / Number(candles[0][4]) - 1 };
+  const last4h = candles.slice(1);
+  return {
+    price,
+    priceChange: price / Number(candles[0][4]) - 1,
+    high4h: Math.max(...last4h.map((c) => Number(c[2]))),
+    low4h: Math.min(...last4h.map((c) => Number(c[3]))),
+  };
+}
+
+// 알림 시점의 단서: 누가 롱/숏을 잡았나. OI만으로는 방향을 모른다 (계약마다 롱 1·숏 1).
+async function getClues(symbol: string, at: number) {
+  const latest = async (path: string) => {
+    const rows = (await binance(
+      `/futures/data/${path}?symbol=${symbol}&period=1h&endTime=${at}&limit=1`,
+    )) as { longShortRatio: string }[];
+    return rows.length > 0 ? Number(rows[0].longShortRatio) : null;
+  };
+  // 테이커 매수량 ÷ 매도량, 알림 전 4시간 합계 (시장가로 먼저 들어온 쪽)
+  const taker = (await binance(
+    `/futures/data/takerlongshortRatio?symbol=${symbol}&period=1h&endTime=${at}&limit=4`,
+  )) as { buyVol: string; sellVol: string }[];
+  const sum = (key: "buyVol" | "sellVol") => taker.reduce((s, r) => s + Number(r[key]), 0);
+  return {
+    account_ratio: await latest("globalLongShortAccountRatio"), // 전체 계정 롱/숏 (계정 수, 개인 쪽 분위기)
+    top_position_ratio: await latest("topLongShortPositionRatio"), // 증거금 상위 20% 롱/숏 (포지션 크기)
+    taker_ratio_4h: taker.length > 0 && sum("sellVol") > 0 ? sum("buyVol") / sum("sellVol") : null,
+  };
 }
 
 async function getFundingRate(symbol: string) {
@@ -61,12 +95,7 @@ async function getFundingRate(symbol: string) {
   return Number(index.lastFundingRate);
 }
 
-async function saveRow(
-  snapshot: Snapshot,
-  kind: "alert" | "control",
-  price: number,
-  priceChange: number,
-) {
+async function saveRow(snapshot: Snapshot, kind: "alert" | "control", move: PriceMove) {
   const { error } = await supabase.from("oi_alerts").upsert(
     {
       symbol: snapshot.symbol,
@@ -74,9 +103,12 @@ async function saveRow(
       alerted_at: new Date(snapshot.at).toISOString(),
       oi_usd: snapshot.oiUsd,
       oi_change_4h: snapshot.oiChange,
-      price,
-      price_change_4h: priceChange,
+      price: move.price,
+      price_change_4h: move.priceChange,
+      high_4h: move.high4h,
+      low_4h: move.low4h,
       funding_rate: await getFundingRate(snapshot.symbol),
+      ...(await getClues(snapshot.symbol, snapshot.at)),
     },
     { onConflict: "symbol,alerted_at,kind", ignoreDuplicates: true },
   );
@@ -119,19 +151,16 @@ async function findAlerts() {
   const quiet = snapshots.filter((s) => s.oiChange < OI_JUMP);
   let alerts = 0;
   for (const snapshot of candidates) {
-    const { price, priceChange } = await getPriceChange(snapshot.symbol, snapshot.at);
-    if (Math.abs(priceChange) > PRICE_FLAT) continue;
-    await saveRow(snapshot, "alert", price, priceChange);
+    const move = await getPriceMove(snapshot.symbol, snapshot.at);
+    if (Math.abs(move.priceChange) > PRICE_FLAT) continue;
+    await saveRow(snapshot, "alert", move);
     // 비교 대상: 같은 시각, 같은 OI 하한을 넘지만 급증은 없는 종목 중 무작위 1개
     const control = quiet[Math.floor(Math.random() * quiet.length)];
-    if (control) {
-      const controlPrice = await getPriceChange(control.symbol, control.at);
-      await saveRow(control, "control", controlPrice.price, controlPrice.priceChange);
-    }
+    if (control) await saveRow(control, "control", await getPriceMove(control.symbol, control.at));
     alerts++;
     console.log(
       `알림: ${snapshot.symbol} OI $${(snapshot.oiUsd / 1e6).toFixed(1)}M (${(snapshot.oiChange * 100).toFixed(0)}%), ` +
-        `가격 ${price} (${(priceChange * 100).toFixed(1)}%), 비교 ${control?.symbol ?? "없음"}`,
+        `가격 ${move.price} (${(move.priceChange * 100).toFixed(1)}%), 비교 ${control?.symbol ?? "없음"}`,
     );
   }
   console.log(
@@ -160,6 +189,8 @@ async function fillResults() {
         price_24h: Number(candles[23][4]),
         price_72h: Number(candles[71][4]),
         max_high_72h: Math.max(...candles.map((c) => Number(c[2]))),
+        // 들고 있었다면 얼마나 빠졌나 (최고가만 보면 잠깐 튀고 빠지는 휩쏘도 "도달"로 보여서)
+        min_low_72h: Math.min(...candles.map((c) => Number(c[3]))),
       })
       .eq("id", row.id);
     if (updateError) throw updateError;

@@ -14,6 +14,13 @@ export interface OiAlertRow {
   price_24h: number | null;
   price_72h: number | null;
   max_high_72h: number | null;
+  // 2026-10-24 추가 (그 전 기록은 비어 있을 수 있음)
+  high_4h: number | null;
+  low_4h: number | null;
+  account_ratio: number | null;
+  top_position_ratio: number | null;
+  taker_ratio_4h: number | null;
+  min_low_72h: number | null;
 }
 
 export async function getOiAlerts() {
