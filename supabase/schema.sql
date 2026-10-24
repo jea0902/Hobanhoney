@@ -312,3 +312,20 @@ alter table oi_alerts add column if not exists top_position_ratio numeric; -- �
 alter table oi_alerts add column if not exists taker_ratio_4h numeric; -- 알림 전 4시간 테이커 매수량 ÷ 매도량
 alter table oi_alerts add column if not exists min_low_72h numeric; -- 72시간 지난 뒤 채움
 alter table oi_alerts enable row level security;
+
+-- MM 펌핑 관찰 후보 (scripts/mm-watchlist, TODO 39번 A-2). 직전 60일 개인 롱/숏 2.5 이상 + 큰손 1.5 이상 + 거래대금 $1~20M인
+-- 종목을 매일 기록하고, 38일 지난 뒤 30일 안에 펌핑(7일 안 종가 2배)이 시작됐는지 채워 분석 결과(약 11%)가 앞으로도 맞는지 본다.
+create table if not exists mm_watchlist (
+  id uuid primary key default gen_random_uuid(),
+  date date not null, -- 기준일 (UTC, 이날 일봉까지 계산)
+  symbol text not null, -- 바이낸스 종목 ("IRYSUSDT")
+  account_ratio_60d numeric not null, -- 직전 60일 전체 계정 롱/숏 평균
+  top_ratio_60d numeric not null, -- 직전 60일 상위 트레이더 포지션 롱/숏 평균
+  volume_30d numeric not null, -- 직전 30일 일 거래대금 중간값 (USDT)
+  price numeric not null, -- 기준일 종가
+  pumped_30d boolean, -- 아래 둘은 38일 지난 뒤 채움
+  max_close_37d numeric, -- 다음 날부터 37일 안 최고 종가
+  unique (date, symbol)
+);
+
+alter table mm_watchlist enable row level security;

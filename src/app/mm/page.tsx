@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { getOiAlerts, summarize } from "@/lib/oiAlerts";
+import { getLatestWatchlist, getWatchlistHitRate } from "@/lib/mmWatchlist";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,8 @@ export default async function MmPage() {
   const alertStats = summarize(rows, "alert");
   const controlStats = summarize(rows, "control");
   const now = Date.now();
+  const watchlist = await getLatestWatchlist();
+  const watchlistHit = await getWatchlistHitRate();
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -49,8 +52,8 @@ export default async function MmPage() {
         </h1>
         <p className="mb-6 text-xs leading-relaxed text-gray-500 dark:text-gray-400 sm:text-sm">
           Wintermute·GSR·DWF 같은 대형 마켓메이커(MM)가 붙은 코인의 펌핑 타이밍을 데이터로 추적하는
-          프로젝트. 1단계로 바이낸스 선물 미결제약정(OI) 급증을 매시간 기록하고, 이 신호가 실제로
-          펌핑을 앞서는지 검증 중임. 블록체인 지갑 추적(Arkham 등)은 손 검증을 거친 뒤 추가 예정.
+          프로젝트. 바이낸스 선물 데이터(미결제약정·롱숏 비율)로 펌핑 전 흔적을 찾는 중이고, 다음
+          단계로 체인 보유자 쏠림, 마지막으로 의심 날짜만 지갑 이동(Arkham 등)을 확인할 예정.
         </p>
 
         <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
@@ -242,26 +245,92 @@ export default async function MmPage() {
         )}
 
         <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
+          관찰 후보
+        </h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+          조건: 직전 60일 개인 롱/숏 평균 2.5 이상, 큰손 롱/숏 평균 1.5 이상, 30일 하루 거래대금
+          중간값 100만~2000만 달러. 바이낸스 USDT 무기한 519종목의 400일치 분석에서 이 조합은 30일
+          안 펌핑(7일 안 종가 2배) 시작 비율이 약 11%였음 (아무 날 평균 4.9%). 10번 중 1번꼴이라
+          매매 신호가 아니라 지켜볼 코인을 좁히는 용도임. 매일 한 번 갱신함.
+        </p>
+        {watchlist.length === 0 ? (
+          <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+            아직 기록 없음.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
+                  <th className="px-4 py-2.5 text-left font-medium">종목</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    개인 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    큰손 롱/숏
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    거래대금
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    종가
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlist.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-gray-50 last:border-0 dark:border-gray-800"
+                  >
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-4">
+                      {row.symbol.replace(/USDT$/, "")}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.account_ratio_60d.toFixed(2)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.top_ratio_60d.toFixed(2)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      ${(row.volume_30d / 1e6).toFixed(1)}M
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {Number(row.price.toPrecision(5))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {watchlist.length > 0 && (
+          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+            {watchlist[0].date} (UTC) 일봉까지 계산, {watchlist.length}종목. 지난 후보의 실제 결과:{" "}
+            {watchlistHit.done === 0
+              ? "기록 38일 뒤부터 집계함."
+              : `${watchlistHit.done}건 중 ${watchlistHit.pumped}건이 30일 안 펌핑 시작 (${((watchlistHit.pumped / watchlistHit.done) * 100).toFixed(1)}%). 같은 종목이 매일 다시 기록되므로 건수는 날짜 기준임.`}
+          </p>
+        )}
+
+        <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
           진행 계획
         </h2>
         <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400 sm:text-sm">
           <li>
             <span className="font-medium text-gray-900 dark:text-gray-100">
-              OI 급증 신호 (진행 중)
+              선물 데이터 (진행 중)
             </span>{" "}
-            — 2~4주 기록 후 알림 종목과 비교 종목의 결과 비교.
+            — OI 급증 알림과 관찰 후보를 쌓아서, 비교 종목·전체 평균보다 실제로 더 자주 펌핑하는지
+            확인.
           </li>
           <li>
-            <span className="font-medium text-gray-900 dark:text-gray-100">
-              MM 지갑 신호 손 검증
-            </span>{" "}
-            — 7일 안 +100% 오른 코인 15~20개와, 같은 시기 상장했지만 오르지 않은 코인 15~20개를
-            비교. 펌핑 전 60일 동안 프로젝트 지갑 → MM 지갑 이동, 거래소 ↔ MM 지갑 입출금을
-            Arkham으로 확인.
+            <span className="font-medium text-gray-900 dark:text-gray-100">체인 보유자 쏠림</span> —
+            펌핑 전 상위 지갑 보유 비중, 거래소로 들어가는 물량 변화 확인.
           </li>
           <li>
-            <span className="font-medium text-gray-900 dark:text-gray-100">자동 추적</span> — 검증을
-            통과한 신호만 MM 지갑 목록으로 자동 수집해 이 화면에 표시.
+            <span className="font-medium text-gray-900 dark:text-gray-100">지갑 이동 확인</span> —
+            앞 단계에서 의심스러운 날짜만 Arkham·Bubblemaps로 MM 지갑 이동 확인.
           </li>
         </ol>
         <p className="mt-6 text-xs text-gray-400 dark:text-gray-500">
