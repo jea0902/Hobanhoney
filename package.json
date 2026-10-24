@@ -12,7 +12,8 @@
     "agent": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/position-agent/index.ts",
     "ai-investors": "node --env-file=.env scripts/ai-investors/index.ts",
     "wallet-traders": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/wallet-traders/index.ts",
-    "oi-alerts": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/oi-alerts/index.ts"
+    "oi-alerts": "node --env-file=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/oi-alerts/index.ts",
+    "mm-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/mm-check/index.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
