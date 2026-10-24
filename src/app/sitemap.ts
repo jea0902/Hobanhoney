@@ -19,6 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: siteUrl, changeFrequency: "always", priority: 1 },
     { url: `${siteUrl}/rankers`, changeFrequency: "hourly", priority: 0.8 },
     { url: `${siteUrl}/ai`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/mm`, changeFrequency: "hourly", priority: 0.7 },
     { url: `${siteUrl}/founder`, changeFrequency: "hourly", priority: 0.7 },
     ...[...traderNames, ...WALLET_TRADERS.map((trader) => trader.name)].map((name) => ({
       url: `${siteUrl}/traders/${encodeURIComponent(name)}`,
