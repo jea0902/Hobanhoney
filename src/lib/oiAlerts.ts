@@ -32,6 +32,20 @@ export async function getOiAlerts() {
   return data as OiAlertRow[];
 }
 
+// 알림 유형: 알림 전 4시간 동안 가장 크게 움직인 폭으로 나눈다 (2026-10-25부터 가격 조건 없이 모든 OI 급증을 기록해서).
+// 시작·끝 가격만 보면 +51% 찍고 돌아온 TREE도 "조용함"이 돼서, 4시간 안 최고·최저가(없으면 끝 가격)로 본다.
+export const ALERT_TYPES = ["조용함", "중간", "급등", "급락"] as const;
+
+export function alertType(row: OiAlertRow) {
+  const start = row.price / (1 + row.price_change_4h);
+  const up = Math.max(row.price_change_4h, row.high_4h === null ? -1 : row.high_4h / start - 1);
+  const down = Math.min(row.price_change_4h, row.low_4h === null ? 1 : row.low_4h / start - 1);
+  const move = Math.max(up, -down);
+  if (move <= 0.05) return "조용함";
+  if (move <= 0.2) return "중간";
+  return up >= -down ? "급등" : "급락";
+}
+
 // 72시간 결과가 채워진 기록만 모아 "72시간 안 최고가가 +30%·+100%에 닿은 비율"을 낸다.
 export function summarize(rows: OiAlertRow[], kind: "alert" | "control") {
   const done = rows.filter((r) => r.kind === kind && r.max_high_72h !== null);

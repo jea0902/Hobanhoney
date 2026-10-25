@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
-import { getOiAlerts, summarize } from "@/lib/oiAlerts";
+import { ALERT_TYPES, alertType, getOiAlerts, summarize } from "@/lib/oiAlerts";
 import { getLatestWatchlist, getWatchlistHitRate, getWatchlistResults } from "@/lib/mmWatchlist";
 import { getLatestHolderDaily } from "@/lib/holderDaily";
 
@@ -55,6 +55,13 @@ export default async function MmPage() {
   const rows = await getOiAlerts();
   const alerts = rows.filter((r) => r.kind === "alert");
   const alertStats = summarize(rows, "alert");
+  const typeStats = ALERT_TYPES.map((type) => ({
+    label: `└ ${type}`,
+    stats: summarize(
+      rows.filter((r) => r.kind === "alert" && alertType(r) === type),
+      "alert",
+    ),
+  }));
   const controlStats = summarize(rows, "control");
   const now = Date.now();
   const watchlist = await getLatestWatchlist();
@@ -81,6 +88,8 @@ export default async function MmPage() {
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
           알림 종목과, 같은 시각 OI 급증이 없던 무작위 비교 종목이 72시간 안에 최고가 기준
           +30%·+100%에 닿은 비율을 비교함. 알림 종목 쪽 비율이 꾸준히 높아야 의미 있는 신호임.
+          알림은 알림 전 4시간 동안 가장 크게 움직인 폭(4시간 안 최고·최저가 기준)으로 유형을 나눠
+          따로 집계함 (조용함 ±5% 이내, 중간 ±5~20%, 급등·급락 20% 초과).
         </p>
         <div className="mb-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <table className="w-full border-collapse text-sm">
@@ -101,6 +110,7 @@ export default async function MmPage() {
             <tbody>
               {[
                 { label: "알림 종목", stats: alertStats },
+                ...typeStats,
                 { label: "비교 종목", stats: controlStats },
               ].map(({ label, stats }) => (
                 <tr
@@ -127,17 +137,19 @@ export default async function MmPage() {
         <p className="mb-8 text-xs text-gray-400 dark:text-gray-500">
           2026-10-24 기록 시작. 시작 전 사전 점검(최근 30일, 바이낸스 USDT 무기한 522종목): 아무
           시점의 72시간 안 +100% 비율 0.5% vs 알림 시점 5.9%(34회 중 2회). 표본이 작아 결론 내리지
-          않음.
+          않음. 2026-10-25 가격 조건(±5%)을 없앰 — 최근 30일 다시 계산하니 ±5%는 펌핑(72시간 안 고가
+          2배) 39번 중 3번만 잡았고 조건이 없으면 31번 (72시간 안 +100% 비율 6.1% → 7.4%, 대신 알림
+          5배·72시간 안 최저 중간값 -10.7% → -14.8%).
         </p>
 
         <h2 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
           최근 OI 급증 알림
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-          조건: 4시간 동안 OI(달러 기준) +30% 이상, 4시간 전 대비 지금 가격 변화 ±5% 이내, OI 100만
-          달러 이상. 같은 종목은 24시간에 한 번만 기록함. 가격 변화는 시작과 끝만 비교해서, 그 사이
-          급등했다가 되돌아온 경우도 포함됨 (첫 알림 3건 모두 이 경우) → 4시간 안 최고·최저가를 같이
-          기록해 조용히 쌓인 경우와 나눠 볼 예정.
+          조건: 4시간 동안 OI(달러 기준) +30% 이상, OI 100만 달러 이상. 같은 종목은 24시간에 한 번만
+          기록함. 2026-10-25 전에는 ‘4시간 가격 변화 ±5% 이내’ 조건이 있었음 (첫 알림 3건은 그 사이
+          급등했다가 되돌아온 경우). 지금은 가격 변화를 조건이 아니라 유형으로 기록하고, 4시간 안
+          최고·최저가도 같이 남김.
         </p>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
           OI는 롱과 숏이 항상 같은 양이라 방향을 알 수 없어서 단서를 같이 기록함. 개인 롱/숏 = 롱
@@ -151,11 +163,12 @@ export default async function MmPage() {
           </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <table className="w-full min-w-[1180px] border-collapse text-sm">
+            <table className="w-full min-w-[1260px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
                   <th className="px-4 py-2.5 text-left font-medium">시각</th>
                   <th className="px-3 py-2.5 text-left font-medium">종목</th>
+                  <th className="px-2 py-2.5 text-left font-medium sm:px-3">유형</th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     OI
                   </th>
@@ -208,6 +221,9 @@ export default async function MmPage() {
                       </td>
                       <td className="whitespace-nowrap px-2 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-3">
                         {row.symbol.replace(/USDT$/, "")}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
+                        {alertType(row)}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                         ${(row.oi_usd / 1e6).toFixed(1)}M

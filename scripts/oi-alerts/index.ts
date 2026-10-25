@@ -1,14 +1,16 @@
-// 바이낸스 USDT 무기한 선물에서 "가격은 그대로인데 미결제약정(OI)만 4시간 새 급증"한 종목을 찾아 oi_alerts에 기록하고,
+// 바이낸스 USDT 무기한 선물에서 미결제약정(OI)이 4시간 새 급증한 종목을 찾아 oi_alerts에 기록하고,
 // 72시간이 지난 기록에는 이후 가격(24h·72h·72h 안 최고가)을 채운다. 신호가 정말 펌핑을 앞서는지 검증하려는 것.
 // 실행: npm run oi-alerts (Oracle VM의 systemd 타이머가 매시 5분에 돌린다)
 //
 // 2026-10-24 지난 30일 전 종목(522개)으로 미리 본 결과: 아무 시점의 72시간 안 +100% 비율 0.5% → 알림 시점 5.9% (34회 중 2회).
 // 표본이 작아 결론을 못 내서, 알림마다 무작위 비교 종목 1개를 같이 기록해 앞으로 쌓이는 결과로 비교한다.
+// 2026-10-25 가격 조건(4시간 ±5%) 없앰: 최근 30일 다시 계산해 보니 ±5%는 펌핑 39번 중 3번만 잡았고, 조건이 없으면 31번
+// (72시간 안 +100% 비율은 6.1% → 7.4%로 비슷, 대신 알림 5배·72시간 안 최저 중간값 -10.7% → -14.8%).
+// 조용한 매집과 급등 중 급증을 다 모아서 유형별로 비교하려고, 가격 변화는 조건이 아니라 기록으로만 남긴다.
 import { setTimeout as sleep } from "node:timers/promises";
 import { createClient } from "@supabase/supabase-js";
 
 const OI_JUMP = 0.3; // 4시간 OI +30% 이상
-const PRICE_FLAT = 0.05; // 같은 4시간 가격 변화 ±5% 이내
 const MIN_OI_USD = 1_000_000; // 너무 작은 코인의 잡음 제외
 const HOUR = 3_600_000;
 
@@ -152,7 +154,6 @@ async function findAlerts() {
   let alerts = 0;
   for (const snapshot of candidates) {
     const move = await getPriceMove(snapshot.symbol, snapshot.at);
-    if (Math.abs(move.priceChange) > PRICE_FLAT) continue;
     await saveRow(snapshot, "alert", move);
     // 비교 대상: 같은 시각, 같은 OI 하한을 넘지만 급증은 없는 종목 중 무작위 1개
     const control = quiet[Math.floor(Math.random() * quiet.length)];
