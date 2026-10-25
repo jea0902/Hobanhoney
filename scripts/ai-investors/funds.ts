@@ -199,10 +199,20 @@ export function runFearGreed(market: Market, today: string) {
 }
 
 // AI 포트: 나스닥100(QQQ) 40 · S&P500(SPY) 20 · 미국 중기국채(IEF) 20 · 금(GLD) 10 · 비트코인 현물 10 (2026-10-18 사용자 설계).
-// 매월 입금일에 자산마다 200일선 위면 목표 비중만큼 담고, 아래면 그 몫은 현금(단기국채 금리)으로 둔 채 전체를 리밸런싱한다.
+// 매월 입금일에 자산마다 200일선 위면 목표 비중만큼 담고, 아래면 그 몫은 단기국채(SGOV)로 옮긴 뒤 전체를 리밸런싱한다.
 // 한 달 사이에 200일선을 깨도 다음 입금일까지 기다린다 — 매일 점검은 백테스트에서 매매만 늘고 결과가 더 나빴다.
 // 백테스트(2005~2026, 세금 전): 연 12.2%·최대 하락 15.9% vs 나스닥100 적립 15.2%·53.4% (TODO.md 33번).
 const PORT_WEIGHTS: Weights = { QQQ: 0.4, SPY: 0.2, IEF: 0.2, GLD: 0.1, "BTC-USD": 0.1 };
+// 200일선 아래로 빠진 자산의 몫을 담아 두는 곳. 현금 이자로만 계산하면 매매 기록에 안 보여서 실제 ETF로 산다 (2026-10-18 사용자 요청).
+const PORT_PARKING = "SGOV";
+const PORT_NAMES: Record<string, string> = {
+  QQQ: "나스닥100",
+  SPY: "S&P500",
+  IEF: "중기국채",
+  GLD: "금",
+  "BTC-USD": "비트코인",
+  SGOV: "단기국채",
+};
 
 function aboveMovingAverage(market: Market, symbol: string, day: string) {
   // 비트코인은 주말에도 거래돼서 날짜가 아니라 그 자산의 마지막 200개 종가로 계산한다
@@ -210,10 +220,49 @@ function aboveMovingAverage(market: Market, symbol: string, day: string) {
   return closes.at(-1)! > closes.reduce((sum, c) => sum + c, 0) / closes.length;
 }
 
+// 매매 기록에 거래마다 왜 사고팔았는지 따로 적는다 (그날 전체 상황을 모든 거래에 붙이면 무슨 뜻인지 알기 어렵다).
+// 지난달과 비교해 200일선 위·아래가 바뀐 자산을 같이 적어야 "왜 이번 달에 이걸 샀나"가 읽힌다.
+function portReason(
+  symbol: string,
+  weight: number,
+  change: number,
+  held: number,
+  below: string[],
+  wentBelow: string[],
+  cameBack: string[],
+  first: boolean,
+) {
+  const names = (symbols: string[]) => symbols.map((s) => PORT_NAMES[s]).join("·");
+  const name = PORT_NAMES[symbol];
+  const target = `${Math.round(weight * 100)}%`;
+  if (first) {
+    return symbol === PORT_PARKING
+      ? `첫 투자: ${names(below)} 200일선 아래 → 그 몫(${target})은 단기국채로`
+      : `첫 투자: ${name} 200일선 위 → 목표 비중 ${target}만큼 매수`;
+  }
+  if (symbol === PORT_PARKING) {
+    if (weight === 0)
+      return `${names(cameBack)} 200일선 위로 돌아옴 → 대피해 둔 단기국채를 전부 팔아 다시 담음`;
+    if (change > 0 && wentBelow.length > 0)
+      return `${names(wentBelow)} 200일선 아래로 내려감 → 그 몫을 단기국채로 대피 (대피 중: ${names(below)}, 합계 ${target})`;
+    if (change > 0)
+      return `${names(below)} 아직 200일선 아래 → 이번 달 적립금 중 그 몫(${target})도 단기국채로`;
+    if (cameBack.length > 0)
+      return `${names(cameBack)} 200일선 위로 돌아옴 → 그 몫만큼 단기국채를 팔아 다시 담음 (남은 대피: ${names(below)}, ${target})`;
+    return `단기국채가 대피 몫 ${target}보다 커져서 넘친 만큼 매도`;
+  }
+  if (weight === 0) return `${name} 200일선 아래로 내려감 → 전부 팔고 그 돈은 단기국채로 대피`;
+  if (held === 0) return `${name} 200일선 위로 올라옴 → 목표 비중 ${target}만큼 다시 매수`;
+  if (change > 0)
+    return `${name} 200일선 위 유지 → 이번 달 적립금을 비중대로 나눠 목표 ${target}까지 추가 매수`;
+  return `${name} 200일선 위 유지, 가격이 올라 목표 비중 ${target}를 넘은 만큼 매도`;
+}
+
 export function runPort(market: Market, today: string) {
   const ledger = new Ledger("port", market);
   const days = market.tradingDays("SPY", START, today);
   const deposits = depositDays(days);
+  let lastBelow: string[] | null = null; // 첫 입금 전에는 비교할 지난달이 없음
   days.forEach((day, i) => {
     if (i > 0) ledger.startDay(day, days[i - 1]); // 배당은 현금으로 쌓였다가 다음 입금 때 같이 배분된다
     if (deposits.has(day)) {
@@ -221,17 +270,37 @@ export function runPort(market: Market, today: string) {
       const below = Object.keys(PORT_WEIGHTS).filter(
         (symbol) => !aboveMovingAverage(market, symbol, day),
       );
-      const weights = Object.fromEntries(
-        Object.entries(PORT_WEIGHTS).map(([symbol, weight]) => [
+      const targets: Weights = { [PORT_PARKING]: 0 };
+      for (const [symbol, weight] of Object.entries(PORT_WEIGHTS)) {
+        targets[symbol] = below.includes(symbol) ? 0 : weight;
+        if (below.includes(symbol)) targets[PORT_PARKING] += weight;
+      }
+      const equity = ledger.value(day);
+      const changes = Object.entries(targets).map(([symbol, weight]) => {
+        const price = market.price(symbol, day)!;
+        const change = (equity * weight) / (1 + STOCK_FEE) / price - ledger.quantity(symbol);
+        return { symbol, weight, change, amount: Math.abs(change * price) };
+      });
+      // 판 돈으로 사야 하니 매도부터. 1달러도 안 되는 자투리 조정은 기록만 어지러워서 건너뛴다.
+      const ordered = [
+        ...changes.filter((c) => c.change < 0),
+        ...changes.filter((c) => c.change > 0),
+      ];
+      for (const { symbol, weight, change, amount } of ordered) {
+        if (amount < 1) continue;
+        const reason = portReason(
           symbol,
-          below.includes(symbol) ? 0 : weight,
-        ]),
-      );
-      const reason =
-        below.length === 0
-          ? "매월 리밸런싱 (전부 200일선 위)"
-          : `매월 리밸런싱 (200일선 아래라 현금으로: ${below.join(", ")})`;
-      rebalanceTo(ledger, market, weights, day, reason);
+          weight,
+          change,
+          ledger.quantity(symbol),
+          below,
+          below.filter((s) => !lastBelow?.includes(s)),
+          lastBelow?.filter((s) => !below.includes(s)) ?? [],
+          lastBelow === null,
+        );
+        ledger.trade(symbol, change, day, reason);
+      }
+      lastBelow = below;
     }
     ledger.record(day);
   });
