@@ -221,25 +221,48 @@ function aboveMovingAverage(market: Market, symbol: string, day: string) {
 }
 
 // 매매 기록에 거래마다 왜 사고팔았는지 따로 적는다 (그날 전체 상황을 모든 거래에 붙이면 무슨 뜻인지 알기 어렵다).
-function portReason(symbol: string, weight: number, change: number, held: number, below: string[]) {
+// 지난달과 비교해 200일선 위·아래가 바뀐 자산을 같이 적어야 "왜 이번 달에 이걸 샀나"가 읽힌다.
+function portReason(
+  symbol: string,
+  weight: number,
+  change: number,
+  held: number,
+  below: string[],
+  wentBelow: string[],
+  cameBack: string[],
+  first: boolean,
+) {
+  const names = (symbols: string[]) => symbols.map((s) => PORT_NAMES[s]).join("·");
   const name = PORT_NAMES[symbol];
   const target = `${Math.round(weight * 100)}%`;
-  if (symbol === PORT_PARKING) {
-    const belowNames = below.map((s) => PORT_NAMES[s]).join("·");
-    if (weight === 0) return "전부 200일선 위로 올라와 단기국채를 팔아 다시 배분";
-    if (change > 0) return `200일선 아래 자산(${belowNames}) 몫 ${target}를 단기국채로`;
-    return `단기국채 몫을 ${target}로 줄임 (200일선 아래: ${belowNames})`;
+  if (first) {
+    return symbol === PORT_PARKING
+      ? `첫 투자: ${names(below)} 200일선 아래 → 그 몫(${target})은 단기국채로`
+      : `첫 투자: ${name} 200일선 위 → 목표 비중 ${target}만큼 매수`;
   }
-  if (weight === 0) return `${name} 200일선 아래 → 전부 매도, 그 몫은 단기국채로`;
-  if (held === 0) return `${name} 200일선 위 → 목표 비중 ${target}만큼 매수`;
-  if (change > 0) return `목표 비중 ${target}에 맞춰 추가 매수`;
-  return `목표 비중 ${target}보다 커져서 일부 매도`;
+  if (symbol === PORT_PARKING) {
+    if (weight === 0)
+      return `${names(cameBack)} 200일선 위로 돌아옴 → 대피해 둔 단기국채를 전부 팔아 다시 담음`;
+    if (change > 0 && wentBelow.length > 0)
+      return `${names(wentBelow)} 200일선 아래로 내려감 → 그 몫을 단기국채로 대피 (대피 중: ${names(below)}, 합계 ${target})`;
+    if (change > 0)
+      return `${names(below)} 아직 200일선 아래 → 이번 달 적립금 중 그 몫(${target})도 단기국채로`;
+    if (cameBack.length > 0)
+      return `${names(cameBack)} 200일선 위로 돌아옴 → 그 몫만큼 단기국채를 팔아 다시 담음 (남은 대피: ${names(below)}, ${target})`;
+    return `단기국채가 대피 몫 ${target}보다 커져서 넘친 만큼 매도`;
+  }
+  if (weight === 0) return `${name} 200일선 아래로 내려감 → 전부 팔고 그 돈은 단기국채로 대피`;
+  if (held === 0) return `${name} 200일선 위로 올라옴 → 목표 비중 ${target}만큼 다시 매수`;
+  if (change > 0)
+    return `${name} 200일선 위 유지 → 이번 달 적립금을 비중대로 나눠 목표 ${target}까지 추가 매수`;
+  return `${name} 200일선 위 유지, 가격이 올라 목표 비중 ${target}를 넘은 만큼 매도`;
 }
 
 export function runPort(market: Market, today: string) {
   const ledger = new Ledger("port", market);
   const days = market.tradingDays("SPY", START, today);
   const deposits = depositDays(days);
+  let lastBelow: string[] | null = null; // 첫 입금 전에는 비교할 지난달이 없음
   days.forEach((day, i) => {
     if (i > 0) ledger.startDay(day, days[i - 1]); // 배당은 현금으로 쌓였다가 다음 입금 때 같이 배분된다
     if (deposits.has(day)) {
@@ -265,9 +288,19 @@ export function runPort(market: Market, today: string) {
       ];
       for (const { symbol, weight, change, amount } of ordered) {
         if (amount < 1) continue;
-        const reason = portReason(symbol, weight, change, ledger.quantity(symbol), below);
+        const reason = portReason(
+          symbol,
+          weight,
+          change,
+          ledger.quantity(symbol),
+          below,
+          below.filter((s) => !lastBelow?.includes(s)),
+          lastBelow?.filter((s) => !below.includes(s)) ?? [],
+          lastBelow === null,
+        );
         ledger.trade(symbol, change, day, reason);
       }
+      lastBelow = below;
     }
     ledger.record(day);
   });
