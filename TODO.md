@@ -29,6 +29,11 @@
   - **결과로 볼 것:** 최종 자산, 연평균 수익률, 최대 낙폭, 그리고 2000년 닷컴·2008년 금융위기·2020년 코로나·2022년 하락장에서 실제로 언제 사고 팔았는지.
   - **주의 — 과최적화:** 기준값을 여러 개 바꿔가며 30년에 가장 잘 맞는 조합을 고르면 과거에만 맞는 규칙이 됨. "수익이 가장 높은 숫자"가 아니라 숫자를 조금씩 바꿔도 결과가 안정적인 규칙을 고를 것.
   - 확정되면 `scripts/ai-investors/funds.ts`의 `runFearGreed`와 `src/lib/aiInvestors.ts`의 AI 공포탐욕 전략 문구를 같이 고치고 재계산.
+- **사이트맵 주소 정리 + 커밋 안 된 로컬 수정 2개 처리** — 메인 노트북 작업 폴더에 커밋 안 된 수정이 2개 남아 있음 (2026-10-11 확인).
+  - **`src/app/robots.ts`:** 사이트맵 주소를 환경변수(`NEXT_PUBLIC_APP_URL`) 대신 `'https://hobanhoney.win/sitemap.xml'`로 직접 적은 수정. CLAUDE.md "환경변수 하드코딩 금지"에 어긋남. **운영 사이트는 이미 정상** (10/11 확인: `robots.txt`의 `Sitemap: https://hobanhoney.win/sitemap.xml`, `sitemap.xml`의 모든 주소가 `https://hobanhoney.win/...`) → Vercel에 `NEXT_PUBLIC_APP_URL`이 제대로 설정돼 있다는 뜻이라 이 로컬 수정은 필요 없음. 사용자에게 일부러 남긴 건지 확인한 뒤 `git checkout -- src/app/robots.ts`로 되돌리기.
+  - **`package-lock.json`:** 의존성 추가·버전 변경 없음. 선택 설치 패키지(`@emnapi/core`, `@emnapi/runtime`)와 `"libc"` 줄만 빠짐 → 다른 npm 버전으로 `npm install` 할 때 파일이 다시 쓰이면서 생긴 차이, 기능 영향 없음. `git checkout -- package-lock.json`으로 되돌리기.
+  - **다른 노트북에서 시작할 때:** `git clone`(또는 `git pull`) → **`npm ci`**(커밋된 lock 그대로 설치, `npm install`과 달리 lock 파일을 다시 쓰지 않음) → **`.env`는 git에 없으니 직접 복사** (Supabase·Bybit 키, 관리자 비밀번호, SEC 이메일이 들어 있으니 USB·비밀번호 관리자 등 안전한 방법으로).
+  - **덤으로 고칠 것:** 운영 사이트맵에 AI 상세 페이지 6개(`/ai/hobanhoney` 등)는 들어가 있지만 AI 탭 목록 페이지 `/ai`는 빠져 있음 → `src/app/sitemap.ts`에 추가. (숨긴 사또·자두두·용느는 사이트맵에서 정상적으로 빠져 있음)
 
 ## 남은 일 — 바로 할 수 있는 것
 
