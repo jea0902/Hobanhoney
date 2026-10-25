@@ -354,3 +354,28 @@ create table if not exists holder_daily (
 );
 
 alter table holder_daily enable row level security;
+
+-- 체인 보유자 쏠림 종목별 결론 (scripts/holder-watch, TODO 39번 B). 체인별 상위 100 금액을 합쳐 CoinGecko 유통량 대비로 보고,
+-- 7일 전과 비교한 상태(검증 전 규칙)를 남긴다. 38일 지난 뒤 30일 안 펌핑 여부를 채워 상태별로 규칙이 맞는지 확인한다.
+create table if not exists holder_coin_daily (
+  id uuid primary key default gen_random_uuid(),
+  date date not null, -- UTC
+  symbol text not null, -- 바이낸스 종목
+  chains text not null, -- 합친 체인 ("bsc,eth")
+  price numeric, -- 바이낸스 선물 그날 종가
+  circulating_supply numeric, -- CoinGecko 유통량 (요약 시점)
+  net100_amount numeric not null, -- 체인별 순매집 상위 100의 순매집 합 (토큰 개수)
+  net100_balance_amount numeric not null, -- 그 지갑들의 지금 잔고 합
+  holder100_amount numeric not null, -- 체인별 잔고 상위 100의 잔고 합
+  new_wallets integer not null,
+  active_wallets integer not null,
+  status text not null, -- 조용한 매집·분산·중립·데이터 쌓는 중
+  net100_change_7d numeric, -- 7일 전 대비 순매집 변화 ÷ 유통량
+  holder100_change_7d numeric, -- 7일 전 대비 잔고 상위 100 보유 변화 ÷ 유통량
+  price_change_7d numeric,
+  pumped_30d boolean, -- 아래 둘은 38일 지난 뒤 채움
+  max_close_37d numeric,
+  unique (date, symbol)
+);
+
+alter table holder_coin_daily enable row level security;

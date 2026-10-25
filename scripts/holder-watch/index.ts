@@ -579,11 +579,146 @@ async function summarizeSolana(symbol: string, token: TokenChain): Promise<Summa
   };
 }
 
+// 종목 상태 (검증 전 규칙, 2026-10-25 사용자 동의): 7일 전과 비교해서
+// - 조용한 매집: 순매집 상위 100의 순매집이 유통량의 +0.5%p 이상 늘었는데 가격은 ±10% 안
+// - 분산: 잔고 상위 100의 보유가 유통량의 -0.5%p 이상 줄었는데 가격은 오름
+// 상태마다 30일 안 펌핑 여부를 채워서 이 규칙이 맞는지 나중에 확인한다.
+const STATUS_DAYS = 7;
+const STATUS_CHANGE = 0.005;
+const STATUS_PRICE_FLAT = 0.1;
+const AHEAD_DAYS = 30;
+
+interface CoinTotals {
+  chains: string[];
+  net: number;
+  netBalance: number;
+  holders: number;
+  fresh: number;
+  active: number;
+}
+
+// CoinGecko 유통량 (한 번에 250개까지). 체인마다 발행량이 달라서(브리지로 옮겨진 양만 있음) 체인을 합칠 때 분모로 쓴다.
+async function getCirculatingSupply(ids: string[]) {
+  const supply = new Map<string, number>();
+  for (let i = 0; i < ids.length; i += 250) {
+    const rows = (await json(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&per_page=250&ids=${ids.slice(i, i + 250).join(",")}`,
+    )) as { id: string; circulating_supply: number | null }[];
+    for (const row of rows) if (row.circulating_supply) supply.set(row.id, row.circulating_supply);
+  }
+  return supply;
+}
+
+// 바이낸스 선물 그날(UTC) 일봉 종가
+async function getClose(symbol: string, date: string) {
+  const candles = (await json(
+    `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1d&startTime=${Date.parse(date)}&limit=1`,
+  )) as string[][];
+  return candles.length > 0 ? Number(candles[0][4]) : null;
+}
+
+async function saveCoin(
+  symbol: string,
+  date: string,
+  totals: CoinTotals,
+  circulating: number | null,
+) {
+  const price = await getClose(symbol, date);
+  const weekAgo = toDate(Date.parse(date) - STATUS_DAYS * DAY);
+  const { data: history, error } = await supabase
+    .from("holder_coin_daily")
+    .select("date, price, net100_amount, holder100_amount")
+    .eq("symbol", symbol)
+    .gte("date", weekAgo)
+    .lt("date", date)
+    .order("date");
+  if (error) throw error;
+  const base = history.find((h) => h.date === weekAgo);
+  let status = `데이터 쌓는 중 (${history.length + 1}/${STATUS_DAYS + 1}일)`;
+  let netChange: number | null = null;
+  let holderChange: number | null = null;
+  let priceChange: number | null = null;
+  if (base && circulating && price && base.price) {
+    netChange = (totals.net - base.net100_amount) / circulating;
+    holderChange = (totals.holders - base.holder100_amount) / circulating;
+    priceChange = price / base.price - 1;
+    if (netChange >= STATUS_CHANGE && Math.abs(priceChange) <= STATUS_PRICE_FLAT)
+      status = "조용한 매집";
+    else if (holderChange <= -STATUS_CHANGE && priceChange > 0) status = "분산";
+    else status = "중립";
+  } else if (base) {
+    status = "판단 불가 (유통량·가격 없음)";
+  }
+  const { error: saveError } = await supabase.from("holder_coin_daily").upsert(
+    {
+      date,
+      symbol,
+      chains: totals.chains.join(","),
+      price,
+      circulating_supply: circulating,
+      net100_amount: totals.net,
+      net100_balance_amount: totals.netBalance,
+      holder100_amount: totals.holders,
+      new_wallets: totals.fresh,
+      active_wallets: totals.active,
+      status,
+      net100_change_7d: netChange,
+      holder100_change_7d: holderChange,
+      price_change_7d: priceChange,
+    },
+    { onConflict: "date,symbol" },
+  );
+  if (saveError) throw saveError;
+}
+
+// 38일 지난 기록에 30일 안 펌핑(그날 종가 대비 이후 7일 안 종가 2배)이 시작됐는지 채운다. 관찰 후보와 같은 정의.
+async function fillResults() {
+  const { data: rows, error } = await supabase
+    .from("holder_coin_daily")
+    .select("id, symbol, date")
+    .is("pumped_30d", null)
+    .lte("date", toDate(Date.now() - (AHEAD_DAYS + 8) * DAY));
+  if (error) throw error;
+  for (const row of rows) {
+    const candles = (await json(
+      `https://fapi.binance.com/fapi/v1/klines?symbol=${row.symbol}&interval=1d&startTime=${Date.parse(row.date) + DAY}&limit=${AHEAD_DAYS + 7}`,
+    )) as string[][];
+    if (candles.length < AHEAD_DAYS + 7) continue; // 상장 폐지 등으로 봉이 모자라면 다음에 다시 봄
+    const closes = candles.map((c) => Number(c[4]));
+    const pumped = closes
+      .slice(0, AHEAD_DAYS)
+      .some((close, j) => Math.max(...closes.slice(j + 1, j + 8)) >= 2 * close);
+    const { error: updateError } = await supabase
+      .from("holder_coin_daily")
+      .update({ pumped_30d: pumped, max_close_37d: Math.max(...closes) })
+      .eq("id", row.id);
+    if (updateError) throw updateError;
+    await sleep(200);
+  }
+}
+
 // 어제(UTC)까지 하루 요약을 Supabase에 남긴다. 잔고는 요약하는 시점(다음 날 새벽)의 값.
+// holder_daily = 체인별 상세(그 체인 발행량 대비), holder_coin_daily = 종목별 합계(유통량 대비)와 상태.
 async function summarize(state: State) {
   const yesterday = toDate(Date.now() - DAY);
   if (state.lastSummary !== null && state.lastSummary >= yesterday) return;
+  const ids = [
+    ...new Set(
+      Object.values(state.tokens)
+        .map((t) => t.coingeckoId)
+        .filter((id) => id !== null),
+    ),
+  ];
+  const circulating = await getCirculatingSupply(ids as string[]);
   for (const [symbol, token] of Object.entries(state.tokens)) {
+    const totals: CoinTotals = {
+      chains: [],
+      net: 0,
+      netBalance: 0,
+      holders: 0,
+      fresh: 0,
+      active: 0,
+    };
     for (const [chain, entry] of Object.entries(token.chains) as [Chain, TokenChain][]) {
       const since = entry.since ?? token.since;
       // EVM은 그날 하루를 다 받은 뒤라야 의미가 있고, 솔라나는 목록을 받는 날부터 시작
@@ -622,8 +757,19 @@ async function summarize(state: State) {
         { onConflict: "date,symbol,chain" },
       );
       if (error) throw error;
+      // 종목 합계: 체인마다 상위 100을 따로 뽑아 더한 값 (체인을 넘나든 상위 100과는 조금 다름)
+      totals.chains.push(chain);
+      totals.net += sum(summary.net, "net");
+      totals.netBalance += sum(summary.net, "balance");
+      totals.holders += sum(summary.holders, "balance");
+      totals.fresh += summary.fresh;
+      totals.active += summary.active;
+    }
+    if (totals.chains.length > 0) {
+      await saveCoin(symbol, yesterday, totals, circulating.get(token.coingeckoId ?? "") ?? null);
     }
   }
+  await fillResults();
   state.lastSummary = yesterday;
   // 요약을 남긴 날짜의 카운터는 더 필요 없음
   for (const date of Object.keys(state.daily)) if (date <= yesterday) delete state.daily[date];

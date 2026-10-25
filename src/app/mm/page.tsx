@@ -3,7 +3,7 @@ import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 import { ALERT_TYPES, alertType, getOiAlerts, summarize } from "@/lib/oiAlerts";
 import { getLatestWatchlist, getWatchlistHitRate, getWatchlistResults } from "@/lib/mmWatchlist";
-import { getLatestHolderDaily } from "@/lib/holderDaily";
+import { getHolderStatusResults, getLatestHolderCoins } from "@/lib/holderCoinDaily";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +31,28 @@ function formatPercent(ratio: number | null, digits = 1) {
   return `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(digits)}%`;
 }
 
-// 총발행량 대비 비율 (부호 없이)
-function formatShare(ratio: number | null) {
-  return ratio === null ? "—" : `${(ratio * 100).toFixed(2)}%`;
+// 유통량 대비 변화 (%p)
+function formatPoint(ratio: number | null) {
+  if (ratio === null) return "—";
+  return `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(2)}%p`;
+}
+
+// 상태마다 트레이더가 읽을 한 줄 (숫자는 7일 전 대비)
+function holderReason(row: {
+  status: string;
+  net100_change_7d: number | null;
+  holder100_change_7d: number | null;
+  price_change_7d: number | null;
+}) {
+  const net = formatPoint(row.net100_change_7d);
+  const holder = formatPoint(row.holder100_change_7d);
+  const price = formatPercent(row.price_change_7d, 0);
+  if (row.status === "조용한 매집")
+    return `가격은 ${price}로 거의 그대로인데 큰 지갑 100개가 유통량의 ${net}를 더 모음 → 가격이 움직이기 전 매집 흔적`;
+  if (row.status === "분산")
+    return `가격이 ${price} 오르는 동안 큰 지갑 100개 보유가 ${holder} 줄어듦 → 오른 가격에 물량을 넘기는 중`;
+  if (row.status === "중립") return `큰 변화 없음 (순매집 ${net}, 보유 ${holder}, 가격 ${price})`;
+  return "7일치가 쌓이면 판단함";
 }
 
 const CHAIN_NAMES: Record<string, string> = {
@@ -67,7 +86,8 @@ export default async function MmPage() {
   const watchlist = await getLatestWatchlist();
   const watchlistHit = await getWatchlistHitRate();
   const watchlistResults = await getWatchlistResults();
-  const holders = await getLatestHolderDaily();
+  const holderCoins = await getLatestHolderCoins();
+  const holderResults = await getHolderStatusResults();
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -432,58 +452,63 @@ export default async function MmPage() {
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
           관찰 후보와 OI 급증 알림 코인의 토큰을
-          BSC·이더리움·Base·Arbitrum·Polygon·Avalanche·Optimism·솔라나에서 추적함. 여러 체인에 있는
-          토큰은 실제 거래가 어느 쪽인지 몰라서 체인마다 따로 표시함. 상위 지갑은 모두{" "}
-          <span className="font-medium">상위 100개 지갑</span>이고, 컨트랙트(DEX 풀·브리지·거래소
-          컨트랙트 등)는 빼고 셈.
+          BSC·이더리움·Base·Arbitrum·Polygon·Avalanche·Optimism·솔라나에서 추적해, 종목마다 &quot;큰
+          지갑 100개가 7일 동안 모았나, 내보냈나&quot;를 가격 움직임과 같이 봄. 모든 %는 CoinGecko
+          유통량 대비이고, 컨트랙트(DEX 풀·브리지 등)는 빼고 셈.
         </p>
         <ul className="mb-3 list-disc space-y-1 pl-5 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
           <li>
-            순매집 상위 100 = 추적 시작 뒤 (받은 양 − 보낸 양)이 가장 큰 지갑 100개의 순매집 합 ÷
-            총발행량. 그 옆 칸은 이 100개 지갑의 지금 잔고 합 ÷ 총발행량.
+            <span className="font-medium text-gray-700 dark:text-gray-300">조용한 매집</span> — 7일
+            동안 순매집 상위 100개 지갑이 유통량의 +0.5%p 이상 더 모았는데 가격은 ±10% 안.
           </li>
-          <li>잔고 상위 100 = 지금 가장 많이 들고 있는 지갑 100개의 잔고 합 ÷ 총발행량.</li>
           <li>
-            솔라나 외 체인은 과거 이체 기록을 무료로 받을 수 없어서 15분마다 새 이체를 쌓는
-            방식이라, 추적 시작 전부터 가만히 들고 있던 지갑은 움직이기 전까지 안 보임. 솔라나는
-            보유자 전체 목록을 매일 받아 첫날 목록과 비교함.
+            <span className="font-medium text-gray-700 dark:text-gray-300">분산</span> — 7일 동안
+            잔고 상위 100개 지갑 보유가 유통량의 0.5%p 이상 줄었는데 가격은 오름.
+          </li>
+          <li>
+            검증 전 규칙임. 상태마다 이후 30일 안 펌핑 여부를 기록해 맞는지 확인 중. 솔라나 외
+            체인은 추적 시작 뒤 움직인 지갑만 보이고, 거래소 지갑이 섞여 있을 수 있음 (확인해서 빼는
+            중).
           </li>
         </ul>
-        {holders.length === 0 ? (
+        {holderCoins.length === 0 ? (
           <p className="rounded-2xl border border-gray-100 bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
-            2026-10-25 추적 시작. 첫 하루 요약은 다음 날 새벽(UTC)에 기록됨.
+            2026-10-26 첫 기록 예정. 상태 판단은 7일치가 쌓인 2026-11-01부터.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full min-w-[1100px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-400 dark:border-gray-800">
                   <th className="px-4 py-2.5 text-left font-medium">종목</th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-left font-medium sm:px-3">
-                    체인
+                    상태
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left font-medium sm:px-3">
+                    읽는 법
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    순매집 상위 100
+                    순매집 7일
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    그 지갑 잔고
+                    보유 7일
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    잔고 상위 100
+                    가격 7일
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
+                    상위 100 보유
                   </th>
                   <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
                     새 지갑
                   </th>
-                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    움직인 지갑
-                  </th>
-                  <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                    추적 시작
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left font-medium sm:px-3">
+                    체인
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {holders.map((row) => (
+                {holderCoins.map((row) => (
                   <tr
                     key={row.id}
                     className="border-b border-gray-50 last:border-0 dark:border-gray-800"
@@ -491,26 +516,36 @@ export default async function MmPage() {
                     <td className="whitespace-nowrap px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-4">
                       {row.symbol.replace(/USDT$/, "")}
                     </td>
-                    <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
-                      {CHAIN_NAMES[row.chain] ?? row.chain}
+                    <td
+                      className={`whitespace-nowrap px-2 py-2.5 font-medium sm:px-3 ${row.status === "조용한 매집" ? "text-red-500" : row.status === "분산" ? "text-blue-500" : "text-gray-400"}`}
+                    >
+                      {row.status}
+                    </td>
+                    <td className="px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
+                      {holderReason(row)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {formatShare(row.net100_pct)}
+                      {formatPoint(row.net100_change_7d)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {formatShare(row.net100_balance_pct)}
+                      {formatPoint(row.holder100_change_7d)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {formatShare(row.holder100_pct)}
+                      {formatPercent(row.price_change_7d, 0)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.circulating_supply
+                        ? `${((row.holder100_amount / row.circulating_supply) * 100).toFixed(1)}%`
+                        : "—"}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                       {row.new_wallets.toLocaleString()}
                     </td>
-                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {row.active_wallets.toLocaleString()}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                      {row.tracked_since}
+                    <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
+                      {row.chains
+                        .split(",")
+                        .map((chain) => CHAIN_NAMES[chain] ?? chain)
+                        .join("·")}
                     </td>
                   </tr>
                 ))}
@@ -518,11 +553,19 @@ export default async function MmPage() {
             </table>
           </div>
         )}
-        {holders.length > 0 && (
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-            {holders[0].date} (UTC) 하루 기준, {holders.length}행 (종목 × 체인).
-          </p>
-        )}
+        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+          {holderCoins.length > 0 &&
+            `${holderCoins[0].date} (UTC) 기준 ${holderCoins.length}종목. `}
+          상태별 실제 결과 (30일 안 펌핑, 38일 지난 기록만):{" "}
+          {holderResults.every((r) => r.done === 0)
+            ? "아직 없음 (첫 결과 2026-12-03 무렵)."
+            : holderResults
+                .map(
+                  (r) =>
+                    `${r.status} ${r.done === 0 ? "—" : `${r.pumped}/${r.done} (${((r.pumped / r.done) * 100).toFixed(1)}%)`}`,
+                )
+                .join(", ")}
+        </p>
 
         <h2 className="mb-1 mt-8 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
           진행 계획
