@@ -335,8 +335,9 @@ async function collect(state: State, chain: EvmChain) {
     for (let i = 0; i < addresses.length; i += MAX_ADDRESSES) {
       logs.push(...(await getLogs(url, addresses.slice(i, i + MAX_ADDRESSES), start, end)));
     }
-    // Avalanche 노드는 이체 기록에 블록 시각을 안 붙여줘서 그 블록만 따로 조회한다
-    const missing = [...new Set(logs.filter((l) => !l.blockTimestamp).map((l) => l.blockNumber))];
+    // Avalanche 노드는 이체 기록에 블록 시각을 안 붙여주고, Arbitrum 공식 노드는 0x0으로 줘서 그 블록만 따로 조회한다
+    const hasTime = (l: Log) => !!l.blockTimestamp && parseInt(l.blockTimestamp, 16) > 0;
+    const missing = [...new Set(logs.filter((l) => !hasTime(l)).map((l) => l.blockNumber))];
     const blocks = (await rpcBatch(
       url,
       missing.map((n) => ({ method: "eth_getBlockByNumber", params: [n, false] })),
@@ -347,7 +348,7 @@ async function collect(state: State, chain: EvmChain) {
       if (!symbol || log.topics.length !== 3) continue; // ERC-721 등 모양이 다른 Transfer 제외
       const { decimals } = state.tokens[symbol].chains[chain]!;
       const amount = Number(BigInt(log.data === "0x" ? 0 : log.data)) / 10 ** decimals;
-      const timestamp = log.blockTimestamp ?? blockTimes.get(log.blockNumber)!;
+      const timestamp = hasTime(log) ? log.blockTimestamp! : blockTimes.get(log.blockNumber)!;
       const date = toDate(parseInt(timestamp, 16) * 1000);
       const day = ((state.daily[date] ??= {})[`${symbol}:${chain}`] ??= { active: 0, fresh: 0 });
       const book = wallets.get(symbol)!;
