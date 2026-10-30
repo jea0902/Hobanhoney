@@ -31,6 +31,12 @@ function formatPercent(ratio: number | null, digits = 1) {
   return `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(digits)}%`;
 }
 
+// 종목 중 몇 %인지 (가격 변화율이 아니라 비율이라 + 부호를 붙이지 않음)
+function formatShare(share: number | null) {
+  if (share === null) return "—";
+  return `${Math.round(share * 100)}%`;
+}
+
 // 유통량 대비 변화 (%p)
 function formatPoint(ratio: number | null) {
   if (ratio === null) return "—";
@@ -86,6 +92,14 @@ export default async function MmPage() {
   const watchlist = await getLatestWatchlist();
   const watchlistHit = await getWatchlistHitRate();
   const watchlistResults = await getWatchlistResults();
+  // 관찰 후보이면서 최근 7일 안에 OI 급증 알림도 뜬 종목. 두 표에 같은 배지를 붙인다.
+  const watchSymbols = new Set(watchlist.map((r) => r.symbol));
+  const overlap = new Set(
+    alerts
+      .filter((r) => now - new Date(r.alerted_at).getTime() <= 7 * 24 * HOUR)
+      .map((r) => r.symbol)
+      .filter((symbol) => watchSymbols.has(symbol)),
+  );
   const holderCoins = await getLatestHolderCoins();
   const holderResults = await getHolderStatusResults();
 
@@ -106,10 +120,10 @@ export default async function MmPage() {
           검증 현황
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-          알림 종목과, 같은 시각 OI 급증이 없던 무작위 비교 종목이 72시간 안에 최고가 기준
-          +30%·+100%에 닿은 비율을 비교함. 알림 종목 쪽 비율이 꾸준히 높아야 의미 있는 신호임.
-          알림은 알림 전 4시간 동안 가장 크게 움직인 폭(4시간 안 최고·최저가 기준)으로 유형을 나눠
-          따로 집계함 (조용함 ±5% 이내, 중간 ±5~20%, 급등·급락 20% 초과).
+          알림이 뜬 뒤 72시간 안에 최고가가 알림 시점보다 30% 이상, 2배(100%) 이상 오른 종목이 전체
+          중 몇 %인지 보여줌. 같은 시각 OI 급증이 없던 무작위 비교 종목보다 꾸준히 높아야 의미
+          있는 신호임. 알림은 알림 전 4시간 동안 가장 크게 움직인 폭으로 유형을 나눠 따로 집계함
+          (조용함 ±5% 이내, 중간 ±5~20%, 급등·급락 20% 초과).
         </p>
         <div className="mb-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <table className="w-full border-collapse text-sm">
@@ -120,10 +134,10 @@ export default async function MmPage() {
                   건수
                 </th>
                 <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                  +30% 도달
+                  30% 이상 오른 비율
                 </th>
                 <th className="whitespace-nowrap px-2 py-2.5 text-right font-medium sm:px-3">
-                  +100% 도달
+                  2배 이상 오른 비율
                 </th>
               </tr>
             </thead>
@@ -144,10 +158,10 @@ export default async function MmPage() {
                     {stats.count}건
                   </td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                    {formatPercent(stats.hit30, 0)}
+                    {formatShare(stats.hit30)}
                   </td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
-                    {formatPercent(stats.hit100, 0)}
+                    {formatShare(stats.hit100)}
                   </td>
                 </tr>
               ))}
@@ -241,6 +255,11 @@ export default async function MmPage() {
                       </td>
                       <td className="whitespace-nowrap px-2 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-3">
                         {row.symbol.replace(/USDT$/, "")}
+                        {overlap.has(row.symbol) && (
+                          <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            관찰 후보
+                          </span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-2 py-2.5 text-gray-700 dark:text-gray-300 sm:px-3">
                         {alertType(row)}
@@ -340,6 +359,11 @@ export default async function MmPage() {
                   >
                     <td className="whitespace-nowrap px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100 sm:px-4">
                       {row.symbol.replace(/USDT$/, "")}
+                      {overlap.has(row.symbol) && (
+                        <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                          OI 알림
+                        </span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2.5 text-right text-gray-700 dark:text-gray-300 sm:px-3">
                       {row.account_ratio_60d.toFixed(2)}
