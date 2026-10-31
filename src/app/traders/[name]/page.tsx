@@ -100,7 +100,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
   const open = mainOpenPosition(rows);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 pb-14 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 lg:pb-0 lg:pl-56">
       <Navbar />
 
       <section className="px-6 py-10">

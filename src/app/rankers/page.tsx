@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default function RankersPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/40 to-indigo-50 pb-14 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 lg:pb-0 lg:pl-56">
       <AutoRefresh intervalMs={10000} />
       <Navbar active="rankers" />
 

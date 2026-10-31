@@ -104,7 +104,7 @@ export default async function MmPage() {
   const holderResults = await getHolderStatusResults();
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-white pb-14 dark:bg-gray-950 lg:pb-0 lg:pl-56">
       <Navbar active="mm" />
       <main className="mx-auto max-w-6xl px-6 pb-10 pt-6">
         <h1 className="mb-1 text-base font-bold text-gray-900 dark:text-gray-100 sm:text-lg">
@@ -121,9 +121,9 @@ export default async function MmPage() {
         </h2>
         <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 sm:text-sm">
           알림이 뜬 뒤 72시간 안에 최고가가 알림 시점보다 30% 이상, 2배(100%) 이상 오른 종목이 전체
-          중 몇 %인지 보여줌. 같은 시각 OI 급증이 없던 무작위 비교 종목보다 꾸준히 높아야 의미
-          있는 신호임. 알림은 알림 전 4시간 동안 가장 크게 움직인 폭으로 유형을 나눠 따로 집계함
-          (조용함 ±5% 이내, 중간 ±5~20%, 급등·급락 20% 초과).
+          중 몇 %인지 보여줌. 같은 시각 OI 급증이 없던 무작위 비교 종목보다 꾸준히 높아야 의미 있는
+          신호임. 알림은 알림 전 4시간 동안 가장 크게 움직인 폭으로 유형을 나눠 따로 집계함 (조용함
+          ±5% 이내, 중간 ±5~20%, 급등·급락 20% 초과).
         </p>
         <div className="mb-2 overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <table className="w-full border-collapse text-sm">

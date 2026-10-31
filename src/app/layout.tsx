@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -43,11 +42,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const theme = cookies().get("theme")?.value;
   const adsenseClientId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
   return (
-    <html lang="ko" className={theme === "dark" ? "dark" : ""}>
+    <html lang="ko" className="dark">
       <head>
         {/* 애드센스 사이트 소유확인 크롤러가 렌더링 없이 원본 스니펫 그대로를 찾아서, next/script 없이 직접 넣는다 */}
         {adsenseClientId && (
