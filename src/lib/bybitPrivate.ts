@@ -1,4 +1,3 @@
-import { createHmac } from "crypto";
 import { logEvent } from "@/lib/logger";
 import type { Direction } from "@/types/position";
 
@@ -6,9 +5,22 @@ import type { Direction } from "@/types/position";
 const BASE_URL = "https://api.bybit.com";
 const RECV_WINDOW = "5000";
 
-function sign(timestamp: string, queryString: string) {
+// Node 전용 crypto 대신 Web Crypto를 쓴다. 트레이더 페이지의 공유 이미지(opengraph-image)가 edge 런타임이라
+// 이 파일을 불러오는데, edge에는 Node의 crypto 모듈이 없어서 배포 빌드가 실패했다 (2026-10-31).
+async function sign(timestamp: string, queryString: string) {
   const payload = timestamp + process.env.BYBIT_API_KEY + RECV_WINDOW + queryString;
-  return createHmac("sha256", process.env.BYBIT_API_SECRET!).update(payload).digest("hex");
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(process.env.BYBIT_API_SECRET!),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
 }
 
 async function signedGet(path: string, params: Record<string, string>) {
@@ -17,7 +29,7 @@ async function signedGet(path: string, params: Record<string, string>) {
   const res = await fetch(`${BASE_URL}${path}?${queryString}`, {
     headers: {
       "X-BAPI-API-KEY": process.env.BYBIT_API_KEY!,
-      "X-BAPI-SIGN": sign(timestamp, queryString),
+      "X-BAPI-SIGN": await sign(timestamp, queryString),
       "X-BAPI-TIMESTAMP": timestamp,
       "X-BAPI-RECV-WINDOW": RECV_WINDOW,
     },
