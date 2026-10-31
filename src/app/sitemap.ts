@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { AI_TRADERS } from "@/lib/aiInvestors";
 import { HIDDEN_TRADERS } from "@/lib/traderGroups";
 import { WALLET_TRADERS } from "@/lib/walletTraderList";
+import { FOUNDER_TRADER_NAME } from "@/lib/founderTrader";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -19,13 +20,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: siteUrl, changeFrequency: "always", priority: 1 },
     { url: `${siteUrl}/rankers`, changeFrequency: "hourly", priority: 0.8 },
     { url: `${siteUrl}/ai`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/events`, changeFrequency: "daily", priority: 0.7 },
+    { url: `${siteUrl}/community`, changeFrequency: "daily", priority: 0.6 },
     { url: `${siteUrl}/mm`, changeFrequency: "hourly", priority: 0.7 },
-    { url: `${siteUrl}/founder`, changeFrequency: "hourly", priority: 0.7 },
-    ...[...traderNames, ...WALLET_TRADERS.map((trader) => trader.name)].map((name) => ({
-      url: `${siteUrl}/traders/${encodeURIComponent(name)}`,
-      changeFrequency: "daily" as const,
-      priority: 0.7,
-    })),
+    ...[...traderNames, ...WALLET_TRADERS.map((trader) => trader.name), FOUNDER_TRADER_NAME].map(
+      (name) => ({
+        url: `${siteUrl}/traders/${encodeURIComponent(name)}`,
+        changeFrequency: "daily" as const,
+        priority: 0.7,
+      }),
+    ),
     ...AI_TRADERS.map((ai) => ({
       url: `${siteUrl}/ai/${ai.id}`,
       changeFrequency: "daily" as const,

@@ -44,6 +44,9 @@ interface ClosedTradeRow {
 }
 
 interface GroupedTrade {
+  symbol: string;
+  entryPrice: number | null;
+  leverage: number | null;
   pnl: number;
   // 그 포지션에 들어간 증거금 = 진입 금액 ÷ 레버리지. 부분청산 조각들의 증거금을 합친 값.
   margin: number;
@@ -68,6 +71,9 @@ function groupIntoTrades(rows: ClosedTradeRow[]): GroupedTrade[] {
       if (row.closed_at > existing.lastClosedAt) existing.lastClosedAt = row.closed_at;
     } else {
       groups.set(key, {
+        symbol: row.symbol,
+        entryPrice: row.avg_entry_price,
+        leverage: row.leverage,
         pnl: Number(row.closed_pnl),
         margin: marginOf(row),
         direction: row.direction,
@@ -116,6 +122,36 @@ export async function getWinRateStats(): Promise<WinRateStats> {
     long: toStats(resultsOf("Long")),
     short: toStats(resultsOf("Short")),
   };
+}
+
+export interface ClosedPosition {
+  symbol: string;
+  direction: "Long" | "Short" | null;
+  entryPrice: number | null;
+  leverage: number | null;
+  result: TradeResult;
+  // 포지션 손익 ÷ 증거금(%). 증거금을 모르는 옛 기록은 null.
+  returnPercent: number | null;
+  closedAt: string;
+}
+
+// 트레이더 페이지에 보여줄 종료된 포지션 (최신순). 승패는 getWinRateStats와 같은 기준.
+export async function getClosedPositions(): Promise<ClosedPosition[]> {
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("closed_trades")
+    .select("closed_pnl, direction, symbol, avg_entry_price, entry_value, leverage, closed_at");
+  return groupIntoTrades((data ?? []) as ClosedTradeRow[])
+    .map((trade) => ({
+      symbol: trade.symbol,
+      direction: trade.direction,
+      entryPrice: trade.entryPrice === null ? null : Number(trade.entryPrice),
+      leverage: trade.leverage === null ? null : Number(trade.leverage),
+      result: getTradeResult(trade),
+      returnPercent: trade.margin > 0 ? (trade.pnl / trade.margin) * 100 : null,
+      closedAt: trade.lastClosedAt,
+    }))
+    .sort((a, b) => b.closedAt.localeCompare(a.closedAt));
 }
 
 // 월 구분은 한국시간 기준. "2026-04" 형태.

@@ -1,10 +1,13 @@
 import Link from "next/link";
 
+// short는 모바일 하단 탭바용 이름 (탭이 6개라 긴 이름은 안 들어감)
 const TABS = [
-  { key: "home", label: "홈", href: "/" },
-  { key: "rankers", label: "랭커", href: "/rankers" },
-  { key: "ai", label: "AI", href: "/ai" },
-  { key: "mm", label: "MM 펌핑 추적", href: "/mm" },
+  { key: "home", label: "홈", short: "홈", href: "/" },
+  { key: "rankers", label: "랭커", short: "랭커", href: "/rankers" },
+  { key: "ai", label: "AI", short: "AI", href: "/ai" },
+  { key: "events", label: "이벤트", short: "이벤트", href: "/events" },
+  { key: "community", label: "커뮤니티", short: "커뮤니티", href: "/community" },
+  { key: "mm", label: "MM 펌핑 추적", short: "MM", href: "/mm" },
 ] as const;
 
 function Logo() {
@@ -41,7 +44,7 @@ export default function Navbar({ active }: { active?: (typeof TABS)[number]["key
                 : "font-medium text-gray-500 dark:text-gray-400"
             }`}
           >
-            {tab.label}
+            {tab.short}
           </Link>
         ))}
       </nav>

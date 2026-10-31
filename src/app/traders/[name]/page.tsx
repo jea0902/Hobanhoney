@@ -8,6 +8,7 @@ import { getWinRate } from "@/lib/positionMath";
 import { displaySymbol } from "@/lib/symbol";
 import { getTraderRows, mainOpenPosition, positionSentence } from "@/lib/traderSnapshot";
 import { isWalletTrader } from "@/lib/walletTraders";
+import { FOUNDER_TRADER_NAME } from "@/lib/founderTrader";
 import type { PositionRow, Direction } from "@/types/position";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,9 @@ export async function generateMetadata({
   const title = `${name} 실시간 포지션 · 롱/숏 · 진입가 · 청산가 | 호반꿀`;
   const source = isWalletTrader(name)
     ? `코인 트레이더 ${name}의 하이퍼리퀴드 지갑 포지션을 실시간으로 추적함. 누적 승률`
-    : `코인 유튜버 ${name}의 방송 속 실제 포지션을 실시간으로 추적함. 누적 승률`;
+    : name === FOUNDER_TRADER_NAME
+      ? `호반꿀 운영자 ${name}의 Bybit 실계좌 포지션을 실시간으로 공개함. 누적 승률`
+      : `코인 유튜버 ${name}의 방송 속 실제 포지션을 실시간으로 추적함. 누적 승률`;
   const description = `${now}${source}, 롱·숏 성향, 포지션 기록.`;
   // openGraph를 따로 안 주면 카톡·SNS 미리보기에 레이아웃의 사이트 제목이 그대로 나온다.
   return {
@@ -95,6 +98,7 @@ export default async function TraderPage({ params }: { params: { name: string } 
       : null;
   const firstRecordedAt = rows[rows.length - 1].created_at;
   const isWallet = isWalletTrader(name);
+  const isFounder = name === FOUNDER_TRADER_NAME;
   const image = rows.find((row) => row.trader_image)?.trader_image ?? null;
   const mainDirection = long.count >= short.count ? "롱" : "숏";
   const open = mainOpenPosition(rows);
@@ -117,7 +121,9 @@ export default async function TraderPage({ params }: { params: { name: string } 
               <p className="mt-1 text-sm text-gray-400">
                 {isWallet
                   ? "하이퍼리퀴드 지갑 실시간 추적 · 9월 말 이후 완료 포지션 50건부터 누적 기록"
-                  : `${formatKstDate(firstRecordedAt)}부터 추적 중`}
+                  : isFounder
+                    ? "호반꿀 운영자 · Bybit 실계좌 실시간 연동 · 종료 포지션은 Bybit 청산 기록 기준"
+                    : `${formatKstDate(firstRecordedAt)}부터 추적 중`}
               </p>
             </div>
           </div>
@@ -206,7 +212,9 @@ export default async function TraderPage({ params }: { params: { name: string } 
             <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">
               종료된 포지션 기록
             </h2>
-            <p className="mt-1 text-xs text-gray-400">최신순 · 한국시간 기준</p>
+            <p className="mt-1 text-xs text-gray-400">
+              최신순 · 한국시간 기준{isFounder && " · 종료된 포지션의 시각은 종료 시각"}
+            </p>
             {decidedRows.length > 0 ? (
               <HistoryTable rows={decidedRows} />
             ) : (

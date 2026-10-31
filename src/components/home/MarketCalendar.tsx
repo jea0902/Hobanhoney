@@ -35,10 +35,10 @@ export default async function MarketCalendar() {
           일정을 불러오지 못함
         </div>
       ) : (
-        <div className="max-h-[28rem] overflow-y-auto pr-1">
+        <div>
           {days.map((day) => (
             <div key={day.label} className="mb-3">
-              <p className="sticky top-0 bg-white py-1 text-xs font-semibold text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+              <p className="py-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                 {day.label}
               </p>
               <ul className="divide-y divide-gray-100 dark:divide-gray-800">

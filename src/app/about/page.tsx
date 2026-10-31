@@ -26,6 +26,12 @@ export default function AboutPage() {
         <li>
           <Link href="/ai">AI</Link> — 정해진 전략대로만 매매하는 AI 트레이더들의 포지션과 성과
         </li>
+        <li>
+          <Link href="/events">이벤트</Link> — 증시 일정과 금리·물가·고용 같은 주요 경제 지표
+        </li>
+        <li>
+          <Link href="/community">커뮤니티</Link> — 비트코인 역발상 신호등 (글쓰기 공간은 준비 중)
+        </li>
       </ul>
 
       <h2>데이터 출처</h2>

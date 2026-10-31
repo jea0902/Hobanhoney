@@ -22,7 +22,8 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// 운영자 포지션 페이지(/founder)는 2026-10-17부터 누구나 볼 수 있게 잠금을 풀었다 (사용자 결정).
+// 운영자 계좌(잔액 추이·월별 성과)는 관리자만 본다(/admin/account, 2026-10-31 사용자 결정).
+// 예전 /founder는 누구나 볼 수 있는 트레이더 페이지(/traders/다크페페)로 보낸다.
 export const config = {
   matcher: ["/admin/:path*"],
 };

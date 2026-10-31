@@ -3,12 +3,14 @@ import { getSupabase } from "@/lib/supabase";
 import { displaySymbol } from "@/lib/symbol";
 import type { PositionRow } from "@/types/position";
 import { getWalletTraderRows, isWalletTrader } from "@/lib/walletTraders";
+import { FOUNDER_TRADER_NAME, getFounderRows } from "@/lib/founderTrader";
 
 // 트레이더 페이지 본문·검색 결과 설명·공유 미리보기 이미지가 같은 "지금 포지션"을 쓴다.
 // 한 요청 안에서 메타데이터와 본문이 같은 데이터를 두 번 읽지 않게 cache로 묶는다.
-// 지갑 추적 트레이더(제프리황 등)는 positions가 아니라 하이퍼리퀴드 기록을 같은 모양으로 받는다.
+// 지갑 추적 트레이더(제프리황 등)는 positions가 아니라 하이퍼리퀴드 기록을, 운영자(다크페페)는 Bybit 실계좌 기록을 같은 모양으로 받는다.
 export const getTraderRows = cache(async (name: string): Promise<PositionRow[]> => {
   if (isWalletTrader(name)) return getWalletTraderRows(name);
+  if (name === FOUNDER_TRADER_NAME) return getFounderRows();
   const supabase = getSupabase();
   const { data } = await supabase
     .from("positions")
