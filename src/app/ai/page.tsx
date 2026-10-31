@@ -27,7 +27,7 @@ export default async function AiPage() {
   const ais = AI_TRADERS.map((ai) => ({ id: ai.id, name: ai.name }));
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-white pb-14 dark:bg-gray-950 lg:pb-0 lg:pl-56">
       <Navbar active="ai" />
       <main className="mx-auto max-w-6xl">
         <section className="px-6 pt-6">

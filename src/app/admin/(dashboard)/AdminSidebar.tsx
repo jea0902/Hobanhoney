@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "유튜버 포지션" },
@@ -27,7 +26,6 @@ function SidebarContent({
           <img src="/logo.png" alt="호반꿀" className="h-8 w-8 object-contain" />
           <span className="text-sm font-bold text-gray-900 dark:text-gray-100">호반꿀 관리자</span>
         </div>
-        <ThemeToggle />
       </div>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1">

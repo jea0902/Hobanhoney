@@ -95,7 +95,7 @@ export default async function AiTraderPage({ params }: { params: { id: string } 
   const sortedHoldings = holdings.slice().sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-white pb-14 dark:bg-gray-950 lg:pb-0 lg:pl-56">
       <Navbar active="ai" />
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
         <section>
