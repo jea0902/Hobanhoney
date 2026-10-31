@@ -56,22 +56,24 @@ export default function BtcLivePrice() {
 
   const up = (ticker?.change24hPercent ?? 0) >= 0;
 
+  const price = ticker
+    ? `$${ticker.lastPrice.toLocaleString("en-US", { minimumFractionDigits: 1 })}`
+    : "—";
+  const change = ticker
+    ? `${up ? "+" : ""}${ticker.change24hPercent.toFixed(2)}% (24h)`
+    : "연결 중…";
+  const changeColor = up ? "text-red-500" : "text-blue-500";
+
   return (
-    <div className="flex flex-col">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+    <div className="flex items-center gap-x-2 text-xs sm:text-sm">
+      <span className="flex items-center gap-1 font-semibold text-gray-500 dark:text-gray-400">
         <span className="h-1.5 w-1.5 rounded-full bg-red-500 motion-safe:animate-pulse" />
-        Bybit BTCUSDT 무기한
-      </p>
-      <p className="mt-0.5 text-xl font-extrabold tabular-nums text-gray-900 dark:text-gray-100 sm:text-3xl">
-        {ticker
-          ? `$${ticker.lastPrice.toLocaleString("en-US", { minimumFractionDigits: 1 })}`
-          : "—"}
-      </p>
-      <p
-        className={`text-xs font-bold tabular-nums sm:text-sm ${up ? "text-red-500" : "text-blue-500"}`}
-      >
-        {ticker ? `${up ? "+" : ""}${ticker.change24hPercent.toFixed(2)}% (24h)` : "연결 중…"}
-      </p>
+        Bybit BTC 무기한
+      </span>
+      <span className="text-base font-extrabold tabular-nums text-gray-900 dark:text-gray-100 sm:text-lg">
+        {price}
+      </span>
+      <span className={`font-bold tabular-nums ${changeColor}`}>{change}</span>
     </div>
   );
 }

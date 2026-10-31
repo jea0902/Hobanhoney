@@ -6,6 +6,7 @@ import Link from "next/link";
 const NAV_ITEMS = [
   { href: "/admin", label: "유튜버 포지션" },
   { href: "/admin/rankers", label: "랭커" },
+  { href: "/admin/account", label: "운영자 계좌" },
   { href: "/admin/principles", label: "운영자 매매원칙 및 전략" },
   { href: "/admin/journal", label: "매매일지" },
   { href: "/admin/logs", label: "로그" },

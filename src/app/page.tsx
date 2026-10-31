@@ -1,35 +1,28 @@
 import Navbar from "@/components/home/Navbar";
-import MarketCards from "@/components/home/MarketCards";
-import Hero from "@/components/home/Hero";
+import MarketOverview from "@/components/home/MarketOverview";
+import MarketMood from "@/components/home/MarketMood";
+import UpcomingEvents from "@/components/home/UpcomingEvents";
 import PositionsSection from "@/components/home/PositionsSection";
 import AiTradersSection from "@/components/home/AiTradersSection";
-import MarketCalendar from "@/components/home/MarketCalendar";
-import KeyIndicators from "@/components/home/KeyIndicators";
 import Footer from "@/components/home/Footer";
 import AutoRefresh from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
-// 네이버 증권 홈을 본뜬 구성: 왼쪽 70%는 자산 가격 박스 → 인간지표 → 실시간 포지션 → AI 트레이더,
-// 오른쪽 30%는 증시 캘린더 → 주요 지표. 왼쪽 사이드바(224px) 때문에 1536px보다 좁으면
-// 70%가 포지션 표 최소 폭(720px)보다 좁아져서 오른쪽 열을 맨 아래로 보낸다.
+// 위에서 아래로: 자산 가격 → 시장 분위기·이벤트 전(한 줄씩) → 실시간 포지션 → AI 트레이더.
+// 증시 캘린더·경제 지표는 이벤트 메뉴로, 역발상 신호등은 커뮤니티 메뉴로, BTC 실시간 가격은 실시간 포지션 제목 오른쪽으로 옮김.
 export default function Home() {
   return (
     <div className="min-h-screen bg-white pb-14 dark:bg-gray-950 lg:pb-0 lg:pl-56">
       <AutoRefresh intervalMs={10000} />
       <Navbar active="home" />
-      <div className="2xl:grid 2xl:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
-        <main className="min-w-0">
-          <MarketCards />
-          <Hero />
-          <PositionsSection />
-          <AiTradersSection />
-        </main>
-        <aside className="flex flex-col gap-8 px-6 py-6 2xl:border-l 2xl:border-gray-100 2xl:dark:border-gray-800">
-          <MarketCalendar />
-          <KeyIndicators />
-        </aside>
-      </div>
+      <main className="min-w-0">
+        <MarketOverview />
+        <MarketMood />
+        <UpcomingEvents />
+        <PositionsSection />
+        <AiTradersSection />
+      </main>
       <Footer />
     </div>
   );

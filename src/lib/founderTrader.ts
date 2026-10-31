@@ -1,6 +1,6 @@
 import { getOwnerPositions } from "@/lib/bybitPrivate";
 import type { OwnerPosition } from "@/lib/bybitPrivate";
-import { getWinRateStats } from "@/lib/closedTrades";
+import { getClosedPositions, getWinRateStats } from "@/lib/closedTrades";
 import type { TraderGroup } from "@/lib/traderGroups";
 import type { PositionRow } from "@/types/position";
 
@@ -13,7 +13,7 @@ export const FOUNDER_IMAGE =
 // 기존 트레이더 카드·표가 쓰는 PositionRow 형태로 바꾼다.
 function toPositionRow(position: OwnerPosition): PositionRow {
   return {
-    id: "founder",
+    id: `founder-open-${position.symbol}`,
     type: "actual",
     trader_name: FOUNDER_TRADER_NAME,
     trader_image: FOUNDER_IMAGE,
@@ -54,9 +54,35 @@ export async function getFounderTrader() {
   return { trader, markPrice: top?.currentPrice ?? null, positions: positions ?? [] };
 }
 
-// 홈 표에서 누르면 갈 곳. 운영자는 운영자 페이지(/founder), 나머지는 트레이더 기록 페이지.
+// 트레이더 기록 페이지(/traders/다크페페)용. 유튜버와 같은 PositionRow 모양으로 맞춘다.
+// 열린 포지션은 Bybit 실시간, 종료된 포지션은 closed_trades(Bybit 청산 기록). 청산 기록에는 진입 시각이 없어서
+// 종료된 행의 created_at은 종료 시각이다.
+export async function getFounderRows(): Promise<PositionRow[]> {
+  const [positions, closed] = await Promise.all([getOwnerPositions(), getClosedPositions()]);
+  const closedRows: PositionRow[] = closed
+    .filter((trade) => trade.direction !== null)
+    .map((trade) => ({
+      id: `founder-closed-${trade.closedAt}-${trade.symbol}-${trade.entryPrice}`,
+      type: "actual",
+      trader_name: FOUNDER_TRADER_NAME,
+      trader_image: FOUNDER_IMAGE,
+      symbol: trade.symbol,
+      leverage: trade.leverage,
+      quantity: null,
+      entry_price: trade.entryPrice,
+      liquidation_price: null,
+      quote: null,
+      direction: trade.direction!,
+      result: trade.result,
+      result_note: null,
+      result_pnl_percent: trade.returnPercent,
+      result_recorded_at: trade.closedAt,
+      created_at: trade.closedAt,
+    }));
+  return [...(positions ?? []).map(toPositionRow), ...closedRows];
+}
+
+// 홈 표에서 누르면 갈 곳: 운영자도 다른 트레이더와 같은 기록 페이지.
 export function traderHref(traderName: string) {
-  return traderName === FOUNDER_TRADER_NAME
-    ? "/founder"
-    : `/traders/${encodeURIComponent(traderName)}`;
+  return `/traders/${encodeURIComponent(traderName)}`;
 }
